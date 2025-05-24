@@ -40,17 +40,36 @@ server s1 {
 # mostly, we replace the place-holders, but we also jack up the probe
 # interval to avoid further interference
 shell {
-    # testdir is automatically set to the directory containing the present vtc
-    sed \
-        -e 's@\.interval = 5s;@.interval = 5m; .initial = 10;@' \
-        -e 's@{{var host}}@${s1_addr}@' \
-        -e 's@{{var port}}@${s1_port}@' \
-        -e 's@{{var ssl_offloaded_header}}@unused@' \
-        -e 's@{{var grace_period}}@100@' \
-        -e 's@{{for item in access_list}}    "{{var item.ip}}";@"${s1_addr}";@' \
-        -e 's@{{/for}}@@' \
-        -e 's@{{.*}}@\/* REPLACED *\/@' \
-        ${testdir}/../../etc/varnish6.vcl > ${tmpdir}/output.vcl
+    # Backend configuration
+    export HOST="${s1_addr}"
+    export PORT="${s1_port}"
+    export GRACE_PERIOD="300"
+
+    # SSL configuration
+    export SSL_OFFLOADED_HEADER="X-Forwarded-Proto"
+
+    # Feature flags
+    export USE_XKEY_VMOD="1"
+    export ENABLE_MEDIA_CACHE="1"
+    export ENABLE_STATIC_CACHE="1"
+
+    # ACL list with IPs
+    export ACCESS_LIST="server1 server2"
+    export SERVER1_IP="${s1_addr}"
+    export SERVER2_IP="10.0.0.1"
+
+    # Cookie list with regex patterns
+    export PASS_ON_COOKIE_PRESENCE="cookie1 cookie2"
+    export COOKIE1_REGEX="^ADMIN"
+    export COOKIE2_REGEX="^PHPSESSID"
+
+    # Performance parameters
+    export TRACKING_PARAMETERS="utm_source|utm_medium|utm_campaign|gclid|cx|ie|cof|siteurl"
+
+    # Design exceptions
+    export DESIGN_EXCEPTIONS_CODE='if (req.url ~ "^/media/theme/") { hash_data("design1"); }'
+
+    ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
 }
 
 varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start

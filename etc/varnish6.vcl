@@ -237,7 +237,7 @@ sub process_graphql_headers {
 
 sub vcl_backend_response {
     # Serve stale content for one day after object expiration while a fresh
-    version is fetched in the background.
+    # version is fetched in the background.
     set beresp.grace = 1d;
 
 {{if use_xkey_vmod}}
