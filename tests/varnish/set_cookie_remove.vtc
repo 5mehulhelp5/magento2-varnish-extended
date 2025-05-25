@@ -1,0 +1,64 @@
+varnishtest "Check if Set-Cookie headers are removed for cacheable content"
+
+server s1 {
+    # first request will be the probe, handle it and be on our way
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp
+
+    # the probe expects the connection to close
+    close
+    accept
+
+    rxreq
+    expect req.url == "/"
+    expect req.method == "GET"
+    txresp -hdr "X-Magento-Tags: all"
+
+    rxreq
+    expect req.url == "/"
+    expect req.method == "GET"
+    txresp -hdr "X-Magento-Tags: all" \
+           -hdr "Set-Cookie: testcookie=1; path=/; HttpOnly"
+} -start
+
+# Generate the VCL file based on included variables and write it to output.vcl
+shell {
+    export s1_addr="${s1_addr}"
+    export s1_port="${s1_port}"
+    ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
+}
+
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
+
+# make sure the probe request fired
+delay 1
+
+client c1 {
+    txreq -method "GET" -url "/"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+
+    txreq -method "GET" -url "/"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+
+    txreq -method "PURGE" -url "/" -hdr "X-Magento-Tags-Pattern: .*" -hdr "X-Magento-Purge-Soft: 1"
+    rxresp
+    expect resp.status == 200
+    expect resp.http.Content-Type == "application/json"
+    expect resp.body == "{ \"invalidated\": 1 }"
+    expect resp.reason == "OK"
+
+    txreq -method "GET" -url "/"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT-GRACE"
+
+    # wait for background fetch to finish
+    delay 1
+
+    txreq -method "GET" -url "/"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.http.Set-Cookie == <undef>
+} -run
