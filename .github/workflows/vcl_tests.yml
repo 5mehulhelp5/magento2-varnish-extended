@@ -23,11 +23,8 @@ jobs:
   prepare-cache:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Build Docker image
-        working-directory: tests/varnish
-        run: docker build -t varnish:fresh .
+      - name: Pull Docker image
+        run: docker pull varnish:fresh
 
       - name: Save Docker image
         run: docker save varnish:fresh > /tmp/varnish.tar
