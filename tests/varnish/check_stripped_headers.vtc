@@ -27,7 +27,6 @@ server s1 {
 
 # Generate the VCL file based on included variables and write it to output.vcl
 shell {
-    export SERVER1_IP="10.0.0.1"
     export s1_addr="${s1_addr}"
     export s1_port="${s1_port}"
     ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
