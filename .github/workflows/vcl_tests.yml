@@ -23,17 +23,18 @@ jobs:
   prepare-cache:
     runs-on: ubuntu-latest
     steps:
-      - name: Pull Docker image
-        run: docker pull varnish:fresh
-
-      - name: Save Docker image
-        run: docker save varnish:fresh > /tmp/varnish.tar
-
-      - name: Cache Docker image
+      - name: Check Docker image cache
+        id: cache-check
         uses: actions/cache@v3
         with:
           path: /tmp/varnish.tar
           key: docker-varnish
+
+      - name: Pull and cache Docker image
+        if: steps.cache-check.outputs.cache-hit != 'true'
+        run: |
+          docker pull varnish:fresh
+          docker save varnish:fresh > /tmp/varnish.tar
 
   test:
     needs: [get-test-files, prepare-cache]
