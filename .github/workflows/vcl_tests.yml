@@ -34,4 +34,4 @@ jobs:
       - name: Run Varnish test
         run: |
           test_file=$(basename ${{ matrix.test_file }})
-          make test-single TEST=${test_file}
+          make test_single TEST=${test_file}
