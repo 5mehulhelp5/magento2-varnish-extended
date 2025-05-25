@@ -184,8 +184,8 @@ sub vcl_recv {
 {{/if}}
     }
 
-    # Don't cache the authenticated GraphQL requests
-    if (req.url ~ "/graphql" && req.http.Authorization ~ "^Bearer") {
+    # Bypass authenticated GraphQL requests without a X-Magento-Cache-Id
+    if (req.url ~ "/graphql" && !req.http.X-Magento-Cache-Id && req.http.Authorization ~ "^Bearer") {
         return (pass);
     }
 
