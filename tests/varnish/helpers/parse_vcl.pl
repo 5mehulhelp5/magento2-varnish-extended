@@ -8,6 +8,29 @@ my $output_file = $ARGV[1] || 'generated.vcl';
 open(my $in, '<', $input_file) or die "Can't open $input_file: $!";
 open(my $out, '>', $output_file) or die "Can't open $output_file: $!";
 
+my %defaults = (
+    'HOST' => $ENV{HOST} || $ENV{s1_addr},
+    'PORT' => $ENV{PORT} || $ENV{s1_port},
+    'GRACE_PERIOD' => '300',
+    'SSL_OFFLOADED_HEADER' => 'X-Forwarded-Proto',
+    'USE_XKEY_VMOD' => '1',
+    'ENABLE_MEDIA_CACHE' => '1',
+    'ENABLE_STATIC_CACHE' => '1',
+    'ACCESS_LIST' => 'server1 server2',
+    'SERVER1_IP' => $ENV{SERVER1_IP} || $ENV{s1_addr},
+    'SERVER2_IP' => '10.0.0.2',
+    'PASS_ON_COOKIE_PRESENCE' => 'cookie1 cookie2',
+    'COOKIE1_REGEX' => '^ADMIN',
+    'COOKIE2_REGEX' => '^PHPSESSID',
+    'TRACKING_PARAMETERS' => 'utm_source|utm_medium|utm_campaign|gclid|cx|ie|cof|siteurl',
+    'DESIGN_EXCEPTIONS_CODE' => 'if (req.url ~ "^/media/theme/") { hash_data("design1"); }'
+);
+
+# Set defaults only for missing environment variables
+for my $key (keys %defaults) {
+    $ENV{$key} = $defaults{$key} unless exists $ENV{$key};
+}
+
 my $content = do { local $/; <$in> };
 
 # Handle if-else statements first

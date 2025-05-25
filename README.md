@@ -1,3 +1,5 @@
+[![VCL Tests](https://github.com/elgentos/magento2-varnish-extended/actions/workflows/vcl_tests.yml/badge.svg)](https://github.com/elgentos/magento2-varnish-extended/actions/workflows/vcl_tests.yml)
+
 # Elgentos_VarnishExtended
 
 This module aims to add some extra features to the Varnish capabilities in Magento.
