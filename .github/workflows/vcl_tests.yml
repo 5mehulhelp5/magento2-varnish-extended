@@ -31,8 +31,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker images
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ hashFiles('tests/varnish/Dockerfile') }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
       - name: Run Varnish test
         working-directory: tests/varnish
         run: |
           test_file=$(basename ${{ matrix.test_file }})
-          make test_single TEST=${test_file}
+          DOCKER_BUILDKIT=1 make test_single TEST=${test_file}
