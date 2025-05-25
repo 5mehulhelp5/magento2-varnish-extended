@@ -1,0 +1,54 @@
+varnishtest "Don't show stripped headers"
+
+server s1 {
+    # first request will be the probe, handle it and be on our way
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp
+
+    # the probe expects the connection to close
+    close
+    accept
+
+    rxreq
+    expect req.url == "/"
+    expect req.method == "GET"
+    txresp -hdr "X-Magento-Debug: 1" \
+           -hdr "X-Magento-Tags: tag1" \
+           -hdr "X-Powered-By: PHP" \
+           -hdr "Server: Apache" \
+           -hdr "X-Varnish: 12345" \
+           -hdr "Via: 1.1 varnish" \
+           -hdr "Link: </style.css>; rel=preload" \
+           -hdr "XKey: somekey" \
+           -hdr "Expires: Thu, 01 Dec 2024 16:00:00 GMT" \
+           -hdr "Pragma: no-cache"
+} -start
+
+# Generate the VCL file based on included variables and write it to output.vcl
+shell {
+    export SERVER1_IP="10.0.0.1"
+    export s1_addr="${s1_addr}"
+    export s1_port="${s1_port}"
+    ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
+}
+
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
+
+# make sure the probe request fired
+delay 1
+
+client c1 {
+    txreq -method "GET" -url "/"
+    rxresp
+    expect resp.http.Expires == <undef>
+    expect resp.http.Pragma == <undef>
+    expect resp.http.X-Magento-Debug == <undef>
+    expect resp.http.X-Magento-Tags == <undef>
+    expect resp.http.X-Powered-By == <undef>
+    expect resp.http.Server == <undef>
+    expect resp.http.X-Varnish == <undef>
+    expect resp.http.Via == <undef>
+    expect resp.http.Link == <undef>
+    expect resp.http.XKey == <undef>
+} -run
