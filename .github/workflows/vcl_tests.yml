@@ -32,6 +32,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Varnish test
+        working-directory: tests/varnish
         run: |
           test_file=$(basename ${{ matrix.test_file }})
           make test_single TEST=${test_file}
