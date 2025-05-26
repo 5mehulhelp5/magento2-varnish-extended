@@ -292,7 +292,7 @@ sub vcl_deliver {
     }
 
     # Let browser and Cloudflare cache non-static content that are cacheable for short period of time
-    if (resp.http.Cache-Control !~ "private" && req.url !~ "^/(media|static)/" && obj.ttl > 0s) {
+    if (resp.http.Cache-Control !~ "private" && req.url !~ "^/(media|static)/" && obj.ttl > 0s && !obj.uncacheable) {
 {{if enable_bfcache}}
         set resp.http.Cache-Control = "must-revalidate, max-age=60";
 {{else}}
