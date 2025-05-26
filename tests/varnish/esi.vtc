@@ -31,6 +31,19 @@ server s1 {
         -hdr "Content-Type: text/html; charset=UTF-8" \
         -body "world"
 
+    rxreq
+    expect req.url == "/1"
+    expect req.method == "GET"
+    txresp -hdr "Cache-Control: public, max-age=86400" \
+        -body {Hello <esi:include src="/header" />!}
+
+    rxreq
+    expect req.url == "/2"
+    expect req.method == "GET"
+    txresp -hdr "Cache-Control: public, max-age=86400" \
+        -hdr "Content-Type: invalid" \
+        -body {Hello <esi:include src="/header" />!}
+
 } -start
 
 # Generate the VCL file based on included variables and write it to output.vcl
@@ -55,4 +68,12 @@ client c1 {
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "HIT"
     expect resp.body == "Hello world!"
+
+    txreq -method "GET" -url "/1"
+    rxresp
+    expect resp.body == {Hello <esi:include src="/header" />!}
+
+    txreq -method "GET" -url "/2"
+    rxresp
+    expect resp.body == {Hello <esi:include src="/header" />!}
 } -run
