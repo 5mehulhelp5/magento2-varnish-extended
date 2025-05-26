@@ -73,8 +73,9 @@ class Notifications implements MessageInterface
     private function getStoreConfigUrl()
     {
         return $this->escaper->escapeUrl(
-            $this->urlBuilder->getUrl('admin/system_config/index', [
+            $this->urlBuilder->getUrl('adminhtml/system_config/index', [
                 'section' => 'system',
+                '_fragment' => 'system_full_page_cache-link'
             ])
         );
     }
