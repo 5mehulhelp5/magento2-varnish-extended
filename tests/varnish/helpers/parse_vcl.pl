@@ -14,6 +14,7 @@ my %defaults = (
     'GRACE_PERIOD' => '300',
     'SSL_OFFLOADED_HEADER' => 'X-Forwarded-Proto',
     'USE_XKEY_VMOD' => '1',
+    'ENABLE_BFCACHE' => '1',
     'ENABLE_MEDIA_CACHE' => '1',
     'ENABLE_STATIC_CACHE' => '1',
     'ACCESS_LIST' => 'server1 server2',

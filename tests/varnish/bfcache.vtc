@@ -1,0 +1,43 @@
+varnishtest "BF cache test by loading the same page twice"
+
+server s1 {
+    # first request will be the probe, handle it and be on our way
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp
+
+    # the probe expects the connection to close
+    close
+    accept
+
+    rxreq
+    expect req.url == "/"
+    expect req.method == "GET"
+    txresp
+
+    rxreq
+    expect req.url == "/"
+    expect req.method == "GET"
+    txresp
+} -start
+
+# Generate the VCL file based on included variables and write it to output.vcl
+shell {
+    export s1_addr="${s1_addr}"
+    export s1_port="${s1_port}"
+    ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
+}
+
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
+
+# make sure the probe request fired
+delay 1
+
+client c1 {
+    txreq -method "GET" -url "/"
+    rxresp
+
+    txreq -method "GET" -url "/"
+    rxresp
+    expect resp.http.Cache-Control == "must-revalidate, max-age=60"
+} -run
