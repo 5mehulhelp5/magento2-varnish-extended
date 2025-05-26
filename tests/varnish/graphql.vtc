@@ -10,31 +10,53 @@ server s1 {
     close
     accept
 
+    # 1. First MISS
     rxreq
     expect req.url == "/graphql"
     expect req.method == "GET"
     txresp
 
+    # 3. UNCACHEABLE (Cache-Id mismatch)
     rxreq
     expect req.url == "/graphql"
     expect req.method == "GET"
-    txresp
+    txresp -hdr "X-Magento-Cache-Id: notmatching"
 
+    # 4. MISS with Cache-Id
     rxreq
     expect req.url == "/graphql"
     expect req.method == "GET"
     txresp -hdr "X-Magento-Cache-Id: 12345"
 
+    # 6. MISS with different Cache-Id
+    rxreq
+    expect req.url == "/graphql"
+    expect req.method == "GET"
+    txresp -hdr "X-Magento-Cache-Id: 12346"
+
+    # 7. MISS with Store header
+    rxreq
+    expect req.url == "/graphql"
+    expect req.method == "GET"
+    txresp -hdr "X-Magento-Cache-Id: 12345" -hdr "Store: 1"
+
+    # 8. MISS with Store and Currency
+    rxreq
+    expect req.url == "/graphql"
+    expect req.method == "GET"
+    txresp -hdr "X-Magento-Cache-Id: 12345" -hdr "Store: 1" -hdr "Content-Currency: 1"
+
+    # 9. UNCACHEABLE with Authorization
     rxreq
     expect req.url == "/graphql"
     expect req.method == "GET"
     txresp
 
+    # 10. MISS with Authorization and Cache-Id
     rxreq
     expect req.url == "/graphql"
     expect req.method == "GET"
     txresp -hdr "X-Magento-Cache-Id: 12345"
-
 } -start
 
 # Generate the VCL file based on included variables and write it to output.vcl
@@ -58,7 +80,6 @@ client c1 {
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "HIT"
 
-    # If backend does not match the X-Magento-Cache-Id, it should be uncacheable
     txreq -method "GET" -url "/graphql" \
         -hdr "X-Magento-Cache-Id: 1234"
     rxresp
@@ -66,6 +87,29 @@ client c1 {
 
     txreq -method "GET" -url "/graphql" \
         -hdr "X-Magento-Cache-Id: 12345"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+
+    txreq -method "GET" -url "/graphql" \
+        -hdr "X-Magento-Cache-Id: 12345"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+
+    txreq -method "GET" -url "/graphql" \
+        -hdr "X-Magento-Cache-Id: 12346"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+
+    txreq -method "GET" -url "/graphql" \
+        -hdr "X-Magento-Cache-Id: 12345" \
+        -hdr "Store: 1"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+
+    txreq -method "GET" -url "/graphql" \
+        -hdr "X-Magento-Cache-Id: 12345" \
+        -hdr "Store: 1" \
+        -hdr "Content-Currency: 1"
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "MISS"
 
