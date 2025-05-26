@@ -1,4 +1,4 @@
-varnishtest "BF cache test by loading the same page twice"
+varnishtest "BF cache disabled"
 
 server s1 {
     # first request will be the probe, handle it and be on our way
