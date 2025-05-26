@@ -1,0 +1,81 @@
+varnishtest "BF cache test by loading the same page twice"
+
+server s1 {
+    # first request will be the probe, handle it and be on our way
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp
+
+    # the probe expects the connection to close
+    close
+    accept
+
+    rxreq
+    expect req.url == "/"
+    expect req.method == "GET"
+    txresp -hdr "Cache-Control: public, max-age=86400"
+
+    rxreq
+    expect req.url == "/media/1"
+    expect req.method == "GET"
+    txresp -hdr "Cache-Control: public, max-age=86400"
+
+    rxreq
+    expect req.url == "/static/1"
+    expect req.method == "GET"
+    txresp -hdr "Cache-Control: public, max-age=86400"
+
+    rxreq
+    expect req.url == "/1"
+    expect req.method == "GET"
+    txresp -hdr "Cache-Control: private, no-cache, no-store"
+
+    rxreq
+    expect req.url == "/2"
+    expect req.method == "GET"
+    txresp -hdr "Cache-Control: max-age=0"
+
+    rxreq
+    expect req.url == "/3"
+    expect req.method == "GET"
+    txresp -hdr "Cache-Control: public, max-age=3600, s-maxage=0"
+} -start
+
+# Generate the VCL file based on included variables and write it to output.vcl
+shell {
+    export s1_addr="${s1_addr}"
+    export s1_port="${s1_port}"
+    export ENABLE_BFCACHE="0"
+    ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
+}
+
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
+
+# make sure the probe request fired
+delay 1
+
+client c1 {
+    txreq -method "GET" -url "/"
+    rxresp
+    expect resp.http.Cache-Control == "no-store, must-revalidate, max-age=60"
+
+    txreq -method "GET" -url "/media/1"
+    rxresp
+    expect resp.http.Cache-Control == "public, max-age=86400"
+
+    txreq -method "GET" -url "/static/1"
+    rxresp
+    expect resp.http.Cache-Control == "public, max-age=86400"
+
+    txreq -method "GET" -url "/1"
+    rxresp
+    expect resp.http.Cache-Control == "private, no-cache, no-store"
+
+    txreq -method "GET" -url "/2"
+    rxresp
+    expect resp.http.Cache-Control == "max-age=0"
+
+    txreq -method "GET" -url "/3"
+    rxresp
+    expect resp.http.Cache-Control == "public, max-age=3600, s-maxage=0"
+} -run
