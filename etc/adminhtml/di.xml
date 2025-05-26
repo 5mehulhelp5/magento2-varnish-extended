@@ -16,7 +16,8 @@
     <type name="Elgentos\VarnishExtended\Model\Notifications">
         <arguments>
             <argument name="notifications" xsi:type="array">
-                <item name="marketing-params" xsi:type="object">Elgentos\VarnishExtended\Model\Notifications\MarketingParams</item>
+                <item name="marketing-params"
+                      xsi:type="object">Elgentos\VarnishExtended\Model\MarketingParameters\Notification</item>
             </argument>
         </arguments>
     </type>

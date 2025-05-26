@@ -1,10 +1,11 @@
 <?php
 
-namespace Elgentos\VarnishExtended\Model\Notifications;
+namespace Elgentos\VarnishExtended\Model\MarketingParameters;
 
+use Elgentos\VarnishExtended\Model\NotificationInterface;
 use Magento\Framework\FlagManager;
 
-class MarketingParams implements NotificationInterface
+class Notification implements NotificationInterface
 {
 
     public const VARNISH_MARKETING_PARAMS = 'varnish-marketing-params';
@@ -25,7 +26,10 @@ class MarketingParams implements NotificationInterface
 
     public function getText()
     {
-        return '<p>' . __('We found marketing parameter(s) which are stripped in Varnish, this could lead to filtering not working properly on category pages.') . '</p>';
+        return '<p>' . __(
+            'We found marketing parameter(s) that will be stripped in Varnish, ' .
+                'this can lead to filtering not working properly on category pages.'
+            ) . '</p>';
     }
 
     public function getSeverity()
