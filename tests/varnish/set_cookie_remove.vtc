@@ -13,12 +13,7 @@ server s1 {
     rxreq
     expect req.url == "/"
     expect req.method == "GET"
-    txresp -hdr "X-Magento-Tags: all"
-
-    rxreq
-    expect req.url == "/"
-    expect req.method == "GET"
-    txresp -hdr "X-Magento-Tags: all" \
+    txresp -hdr "Cache-Control: public, max-age=86400" \
            -hdr "Set-Cookie: testcookie=1; path=/; HttpOnly"
 } -start
 
@@ -34,31 +29,20 @@ varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash"
 # make sure the probe request fired
 delay 1
 
+logexpect l1 -v v1 -g request -i BerespUnset -q "ReqUrl eq '/'" {
+    expect 0 1002 BerespUnset "Set-Cookie: testcookie=1; path=/; HttpOnly"
+} -start
+
 client c1 {
     txreq -method "GET" -url "/"
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "MISS"
-
-    txreq -method "GET" -url "/"
-    rxresp
-    expect resp.http.X-Magento-Cache-Debug == "HIT"
-
-    txreq -method "PURGE" -url "/" -hdr "X-Magento-Tags-Pattern: .*" -hdr "X-Magento-Purge-Soft: 1"
-    rxresp
-    expect resp.status == 200
-    expect resp.http.Content-Type == "application/json"
-    expect resp.body == "{ \"invalidated\": 1 }"
-    expect resp.reason == "OK"
-
-    txreq -method "GET" -url "/"
-    rxresp
-    expect resp.http.X-Magento-Cache-Debug == "HIT-GRACE"
-
-    # wait for background fetch to finish
-    delay 1
+    expect resp.http.Set-Cookie == <undef>
 
     txreq -method "GET" -url "/"
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "HIT"
     expect resp.http.Set-Cookie == <undef>
 } -run
+
+logexpect l1 -wait
