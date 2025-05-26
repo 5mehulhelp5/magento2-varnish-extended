@@ -1,4 +1,4 @@
-varnishtest "xkey: (hard) purge a tag"
+varnishtest "xkey: soft purge the entire cache"
 
 server s1 {
     # first request will be the probe, handle it and be on our way
@@ -26,16 +26,21 @@ server s1 {
     expect req.method == "GET"
     txresp -hdr "X-Magento-Tags: cat_c,cat_c_37,cat_p_695,cat_c_21" -hdr "Context: fill the cache"
 
-    # hard purge cat_p_694
+    # soft purge everything
     rxreq
     expect req.url == "/"
     expect req.method == "GET"
-    txresp -hdr "X-Magento-Tags: cat_c,cat_c_38,cat_p_694,cat_c_20" -hdr "Context: hard purge cat_p_694"
+    txresp -hdr "X-Magento-Tags: cat_c,cat_c_38,cat_p_694,cat_c_20" -hdr "Context: soft purge everything"
 
     rxreq
     expect req.url == "/hero-hoodie.html"
     expect req.method == "GET"
-    txresp -hdr "X-Magento-Tags: cat_c,cat_c_37,cat_p_694,cat_c_21"  -hdr "Context: hard purge cat_p_694"
+    txresp -hdr "X-Magento-Tags: cat_c,cat_c_37,cat_p_694,cat_c_21" -hdr "Context: soft purge everything"
+
+    rxreq
+    expect req.url == "/breathe-easy-tank.html"
+    expect req.method == "GET"
+    txresp -hdr "X-Magento-Tags: cat_c,cat_c_37,cat_p_695,cat_c_21" -hdr "Context: soft purge everything"
 } -start
 
 # Generate the VCL file based on included variables and write it to output.vcl
@@ -64,26 +69,24 @@ client c1 {
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "MISS"
 
-    # hard purge that affects "/" & "/hero-hoodie.html"
-    txreq -method "PURGE" -url "/" -hdr "X-Magento-Tags-Pattern: ((^|,)cat_p_694(,|$))"
+    # soft purge the entire cache
+    txreq -method "PURGE" -url "/" -hdr "X-Magento-Tags-Pattern: .*" -hdr "X-Magento-Purge-Soft: 1"
     rxresp
     expect resp.status == 200
     expect resp.http.Content-Type == "application/json"
-    expect resp.body == "{ \"invalidated\": 2 }"
+    expect resp.body == "{ \"invalidated\": 3 }"
     expect resp.reason == "OK"
 
-    # hard purges cause cache misses
-    txreq -method "GET" -url "/" -hdr "Context: hard purge cat_p_694"
+    # soft purges cause cache misses
+    txreq -method "GET" -url "/" -hdr "Context: soft purge everything"
     rxresp
-    expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.http.X-Magento-Cache-Debug == "HIT-GRACE"
 
-    txreq -method "GET" -url "/hero-hoodie.html" -hdr "Context: hard purge cat_p_694"
+    txreq -method "GET" -url "/hero-hoodie.html" -hdr "Context: soft purge everything"
     rxresp
-    expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.http.X-Magento-Cache-Debug == "HIT-GRACE"
 
-    # "/breathe-easy-tank.html" is unaffected
-    txreq -method "GET" -url "/breathe-easy-tank.html" -hdr "Context: soft purge cat_p_694"
+    txreq -method "GET" -url "/breathe-easy-tank.html" -hdr "Context: soft purge everything"
     rxresp
-    expect resp.http.X-Magento-Cache-Debug == "HIT"
-
+    expect resp.http.X-Magento-Cache-Debug == "HIT-GRACE"
 } -run
