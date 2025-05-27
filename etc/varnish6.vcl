@@ -196,7 +196,7 @@ sub vcl_hash {
     # For non-graphql requests we add the value of the Magento Vary cookie to the
     # object hash. This vary cookie can contain things like currency, store code, etc.
     # These variations are typically rendered server-side, so we need to cache them separately.
-    if (req.url !~ "/graphql" && cookie.isset("X-Magento-Vary=")) {
+    if (req.url !~ "/graphql" && cookie.isset("X-Magento-Vary")) {
         hash_data(cookie.get("X-Magento-Vary"));
     }
 

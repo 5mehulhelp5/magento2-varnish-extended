@@ -1,0 +1,111 @@
+varnishtest "X-Magento-Vary cookie handling"
+
+server s1 {
+    # Probe request
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp
+    close
+    accept
+
+    # First request without vary cookie
+    rxreq
+    expect req.url == "/"
+    expect req.http.cookie == <undef>
+    txresp -body "response1"
+
+    # First request with vary=test1
+    rxreq
+    expect req.url == "/"
+    expect req.http.cookie == "X-Magento-Vary=test1"
+    txresp -body "response2"
+
+    # First request with vary=test2
+    rxreq
+    expect req.url == "/"
+    expect req.http.cookie == "X-Magento-Vary=test2"
+    txresp -body "response3"
+
+    # GraphQL request
+    rxreq
+    expect req.url == "/graphql"
+    expect req.http.cookie == "X-Magento-Vary=test1"
+    txresp -body "graphql_response"
+} -start
+
+# Generate VCL
+shell {
+    export s1_addr="${s1_addr}"
+    export s1_port="${s1_port}"
+    ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
+}
+
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
+
+# Wait for probe
+delay 1
+
+logexpect l1 -v v1 -g request -q {ReqURL ~ "/graphql"} {
+    fail add * Hash test1
+    expect * 1010 Hash /graphql
+    expect * 1010 Hash 127.0.0.1
+    fail clear
+} -start
+
+client c1 {
+    # Test 1: No vary cookie
+    txreq -url "/"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.body == "response1"
+
+    # Should hit cache
+    txreq -url "/"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "response1"
+
+    # Test 2: With vary=test1
+    txreq -url "/" -hdr "Cookie: X-Magento-Vary=test1"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.body == "response2"
+
+    # Should hit cache for vary=test1
+    txreq -url "/" -hdr "Cookie: X-Magento-Vary=test1"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "response2"
+
+    # Test 3: With vary=test2
+    txreq -url "/" -hdr "Cookie: X-Magento-Vary=test2"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.body == "response3"
+
+    # Should hit cache for vary=test2
+    txreq -url "/" -hdr "Cookie: X-Magento-Vary=test2"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "response3"
+
+    # Test 4: GraphQL endpoint should ignore vary cookie
+    txreq -url "/graphql" -hdr "Cookie: X-Magento-Vary=test1"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.body == "graphql_response"
+
+    # Test 5: GraphQL endpoint should return a cache hit
+    txreq -url "/graphql" -hdr "Cookie: X-Magento-Vary=test1"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "graphql_response"
+
+    # Test 6: GraphQL endpoint should return a cache hit and ignore vary cookie
+    txreq -url "/graphql" -hdr "Cookie: X-Magento-Vary=test2"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "graphql_response"
+} -run
+
+logexpect l1 -wait
