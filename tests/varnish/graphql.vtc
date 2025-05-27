@@ -14,48 +14,61 @@ server s1 {
     rxreq
     expect req.url == "/graphql"
     expect req.method == "GET"
+    expect req.http.X-Magento-Cache-Id == <undef>
     txresp
 
     # 3. UNCACHEABLE (Cache-Id mismatch)
     rxreq
     expect req.url == "/graphql"
     expect req.method == "GET"
+    expect req.http.X-Magento-Cache-Id == "1234"
     txresp -hdr "X-Magento-Cache-Id: notmatching"
 
     # 4. MISS with Cache-Id
     rxreq
     expect req.url == "/graphql"
     expect req.method == "GET"
+    expect req.http.X-Magento-Cache-Id == "12345"
     txresp -hdr "X-Magento-Cache-Id: 12345"
 
     # 6. MISS with different Cache-Id
     rxreq
     expect req.url == "/graphql"
     expect req.method == "GET"
+    expect req.http.X-Magento-Cache-Id == "12346"
     txresp -hdr "X-Magento-Cache-Id: 12346"
 
     # 7. MISS with Store header
     rxreq
     expect req.url == "/graphql"
     expect req.method == "GET"
+    expect req.http.X-Magento-Cache-Id == "12345"
+    expect req.http.Store == "1"
     txresp -hdr "X-Magento-Cache-Id: 12345" -hdr "Store: 1"
 
     # 8. MISS with Store and Currency
     rxreq
     expect req.url == "/graphql"
     expect req.method == "GET"
+    expect req.http.X-Magento-Cache-Id == "12345"
+    expect req.http.Store == "1"
+    expect req.http.Content-Currency == "1"
     txresp -hdr "X-Magento-Cache-Id: 12345" -hdr "Store: 1" -hdr "Content-Currency: 1"
 
     # 9. UNCACHEABLE with Authorization
     rxreq
     expect req.url == "/graphql"
     expect req.method == "GET"
+    expect req.http.X-Magento-Cache-Id == <undef>
+    expect req.http.Authorization == "Bearer 12345"
     txresp
 
     # 10. MISS with Authorization and Cache-Id
     rxreq
     expect req.url == "/graphql"
     expect req.method == "GET"
+    expect req.http.X-Magento-Cache-Id == "12345"
+    expect req.http.Authorization == "Bearer 12345"
     txresp -hdr "X-Magento-Cache-Id: 12345"
 } -start
 
@@ -101,8 +114,26 @@ client c1 {
     expect resp.http.X-Magento-Cache-Debug == "MISS"
 
     txreq -method "GET" -url "/graphql" \
+        -hdr "X-Magento-Cache-Id: 12346"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+
+    txreq -method "GET" -url "/graphql" \
         -hdr "X-Magento-Cache-Id: 12345" \
         -hdr "Store: 1"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+
+    txreq -method "GET" -url "/graphql" \
+        -hdr "X-Magento-Cache-Id: 12345" \
+        -hdr "Store: 1"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+
+    txreq -method "GET" -url "/graphql" \
+        -hdr "X-Magento-Cache-Id: 12345" \
+        -hdr "Store: 1" \
+        -hdr "Content-Currency: 1"
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "MISS"
 
@@ -111,7 +142,7 @@ client c1 {
         -hdr "Store: 1" \
         -hdr "Content-Currency: 1"
     rxresp
-    expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
 
     txreq -method "GET" -url "/graphql" \
         -hdr "Authorization: Bearer 12345"
@@ -123,4 +154,10 @@ client c1 {
         -hdr "X-Magento-Cache-Id: 12345"
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "MISS"
+
+    txreq -method "GET" -url "/graphql" \
+        -hdr "Authorization: Bearer 12345" \
+        -hdr "X-Magento-Cache-Id: 12345"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
 } -run
