@@ -10,6 +10,7 @@ server s1 {
     close
     accept
 
+    # Cache miss, body contains an ESI tag that will get parsed by Varnish
     rxreq
     expect req.url == "/"
     expect req.method == "GET"
@@ -17,6 +18,9 @@ server s1 {
         -hdr "Content-Type: text/html; charset=UTF-8" \
         -body {Hello <esi:include src="/header" />!}
 
+    # The request to "/" contained an ESI tag that was parsed by Varnish
+    # The ESI tag pointed to "/header", which results in an internal subrequest to this page
+    # This page will not be cacheable
     rxreq
     expect req.url == "/header"
     expect req.method == "GET"
@@ -24,6 +28,8 @@ server s1 {
         -hdr "Content-Type: text/html; charset=UTF-8" \
         -body "world"
 
+    # Despite the "/" returning a cache hit, the "/header" subrequest from the ESI tag is not cacheable
+    # This will trigger a backend request to "/header" while the request to "/" will be served from the cache
     rxreq
     expect req.url == "/header"
     expect req.method == "GET"
@@ -31,12 +37,17 @@ server s1 {
         -hdr "Content-Type: text/html; charset=UTF-8" \
         -body "world"
 
+    # The request to "/1" doesn't return a Content-Type response header
+    # Varnish will not parse the ESI tag
     rxreq
     expect req.url == "/1"
     expect req.method == "GET"
     txresp -hdr "Cache-Control: public, max-age=86400" \
         -body {Hello <esi:include src="/header" />!}
 
+    # The request to "/2" doesn't return a valid Content-Type response header
+    # Varnish will not parse the ESI tag
+    # The Conten-Type value should start with "text/"
     rxreq
     expect req.url == "/2"
     expect req.method == "GET"
@@ -59,20 +70,31 @@ varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash"
 delay 1
 
 client c1 {
+    # This request triggers 2 backend responses, but only returns a single response
+    # The first backend response is for the requested page "/"
+    # The backend response contains an ESI tag (<esi:include src="/header" />)
+    # This ESI triggers an internal subrequest in Varnish to the "/header" endpoint, which is the second backend response
+    # The response is stitched together as a single response to the requesting client
     txreq -method "GET" -url "/"
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "MISS"
     expect resp.body == "Hello world!"
 
+    # The "/" page is stored in the cache and returns a cache hit
+    # However the ESI tag pointing to "/header" is not cacheable and will require a backend fetch
     txreq -method "GET" -url "/"
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "HIT"
     expect resp.body == "Hello world!"
 
+    # There is no Content-Type response header
+    # Varnish will not parse the ESI tag
     txreq -method "GET" -url "/1"
     rxresp
     expect resp.body == {Hello <esi:include src="/header" />!}
 
+    # The Content-Type response header doesn't start with "text/"
+    # Varnish will not parse the ESI tag
     txreq -method "GET" -url "/2"
     rxresp
     expect resp.body == {Hello <esi:include src="/header" />!}
