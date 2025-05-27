@@ -20,8 +20,24 @@ jobs:
           FILES=$(ls tests/varnish/*.vtc | jq -R -s -c 'split("\n")[:-1]')
           echo "matrix=${FILES}" >> $GITHUB_OUTPUT
 
+  prepare-cache:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Docker image cache
+        id: cache-check
+        uses: actions/cache@v3
+        with:
+          path: /tmp/varnish.tar
+          key: docker-varnish
+
+      - name: Pull and cache Docker image
+        if: steps.cache-check.outputs.cache-hit != 'true'
+        run: |
+          docker pull varnish:fresh
+          docker save varnish:fresh > /tmp/varnish.tar
+
   test:
-    needs: get-test-files
+    needs: [get-test-files, prepare-cache]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -30,6 +46,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Load cached Docker image
+        uses: actions/cache@v3
+        with:
+          path: /tmp/varnish.tar
+          key: docker-varnish
+
+      - name: Load Docker image
+        run: docker load < /tmp/varnish.tar
 
       - name: Run Varnish test
         working-directory: tests/varnish
