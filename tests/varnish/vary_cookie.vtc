@@ -11,21 +11,25 @@ server s1 {
     # First request without vary cookie
     rxreq
     expect req.url == "/"
+    expect req.http.cookie == <undef>
     txresp -body "response1"
 
     # First request with vary=test1
     rxreq
     expect req.url == "/"
+    expect req.http.cookie == "X-Magento-Vary=test1"
     txresp -body "response2"
 
     # First request with vary=test2
     rxreq
     expect req.url == "/"
+    expect req.http.cookie == "X-Magento-Vary=test2"
     txresp -body "response3"
 
     # GraphQL request
     rxreq
     expect req.url == "/graphql"
+    expect req.http.cookie == "X-Magento-Vary=test1"
     txresp -body "graphql_response"
 } -start
 
@@ -89,6 +93,18 @@ client c1 {
     txreq -url "/graphql" -hdr "Cookie: X-Magento-Vary=test1"
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.body == "graphql_response"
+
+    # Test 5: GraphQL endpoint should return a cache hit
+    txreq -url "/graphql" -hdr "Cookie: X-Magento-Vary=test1"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "graphql_response"
+
+    # Test 6: GraphQL endpoint should return a cache hit and ignore vary cookie
+    txreq -url "/graphql" -hdr "Cookie: X-Magento-Vary=test2"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
     expect resp.body == "graphql_response"
 } -run
 
