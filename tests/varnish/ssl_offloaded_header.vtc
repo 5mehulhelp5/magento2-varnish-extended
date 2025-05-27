@@ -1,0 +1,278 @@
+varnishtest "X-Magento-Vary cookie handling"
+
+server s1 {
+    # Probe request
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp
+    close
+    accept
+
+    # First request without X-Forwarded-Proto header
+    rxreq
+    expect req.url == "/"
+    expect req.http.X-Forwarded-Proto == <undef>
+    txresp -body "response1"
+
+    # Second request with X-Forwarded-Proto header set to "https"
+    rxreq
+    expect req.url == "/"
+    expect req.http.X-Forwarded-Proto == "https"
+    txresp -body "response2"
+
+    # Third request with X-Forwarded-Proto header set to "http"
+    rxreq
+    expect req.url == "/"
+    expect req.http.X-Forwarded-Proto == "http"
+    txresp -body "response3"
+
+    # Fourth request for media content with X-Forwarded-Proto header set to "https"
+    # X-Forwarded-Proto is stripped off in the VCL for media content
+    rxreq
+    expect req.url == "/media/1"
+    expect req.http.X-Forwarded-Proto == <undef>
+    txresp -body "response4"
+
+    # Fifth request: repeat previous request but with "/pub/" prefix
+    rxreq
+    expect req.url == "/pub/media/1"
+    expect req.http.X-Forwarded-Proto == <undef>
+    txresp -body "response5"
+
+    # Sixt request for static content with X-Forwarded-Proto header set to "https"
+    # X-Forwarded-Proto is stripped off in the VCL for media content
+    rxreq
+    expect req.url == "/static/1"
+    expect req.http.X-Forwarded-Proto == <undef>
+    txresp -body "response6"
+
+    # Seventh request: repeat previous request but with "/pub/" prefix
+    rxreq
+    expect req.url == "/pub/static/1"
+    expect req.http.X-Forwarded-Proto == <undef>
+    txresp -body "response7"
+
+} -start
+
+# Generate VCL
+shell {
+    export s1_addr="${s1_addr}"
+    export s1_port="${s1_port}"
+    export SSL_OFFLOADED_HEADER="X-Forwarded-Proto"
+    export ENABLE_MEDIA_CACHE="1"
+    export ENABLE_STATIC_CACHE="1"
+    ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
+}
+
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
+
+# Wait for probe
+delay 1
+
+logexpect l1 -v v1 -g request -i Hash {
+    # Test 1: no X-Forwarded-Proto header set
+    expect 0 1001 Hash ^/$
+    expect 0 1001 Hash ^127\.0\.0\.1$
+    expect 0 1003 Hash ^/$
+    expect 0 1003 Hash ^127\.0\.0\.1$
+
+    # Test 2: X-Forwarded-Proto header set to "https"
+    expect 0 1004 Hash ^https$
+    expect 0 1004 Hash ^/$
+    expect 0 1004 Hash ^127\.0\.0\.1$
+    expect 0 1006 Hash ^https$
+    expect 0 1006 Hash ^/$
+    expect 0 1006 Hash ^127\.0\.0\.1$
+
+    # Test 3: X-Forwarded-Proto header set to "http"
+    expect 0 1007 Hash ^http$
+    expect 0 1007 Hash ^/$
+    expect 0 1007 Hash ^127\.0\.0\.1$
+    expect 0 1009 Hash ^http$
+    expect 0 1009 Hash ^/$
+    expect 0 1009 Hash ^127\.0\.0\.1$
+
+    # Test 4: media content with X-Forwarded-Proto: https
+    expect 0 1010 Hash ^/media/1$
+    expect 0 1010 Hash ^127\.0\.0\.1$
+    expect 0 1012 Hash ^/media/1$
+    expect 0 1012 Hash ^127\.0\.0\.1$
+    # No X-Forwarded-Proto header
+    expect 0 1013 Hash ^/media/1$
+    expect 0 1013 Hash ^127\.0\.0\.1$
+    # X-Forwarded-Proto: foo
+    expect 0 1014 Hash ^/media/1$
+    expect 0 1014 Hash ^127\.0\.0\.1$
+
+    # Test 5: same as test 4 but with "/pub" prefix
+    expect 0 1015 Hash ^/pub/media/1$
+    expect 0 1015 Hash ^127\.0\.0\.1$
+    expect 0 1017 Hash ^/pub/media/1$
+    expect 0 1017 Hash ^127\.0\.0\.1$
+    # No X-Forwarded-Proto header
+    expect 0 1018 Hash ^/pub/media/1$
+    expect 0 1018 Hash ^127\.0\.0\.1$
+    # X-Forwarded-Proto: foo
+    expect 0 1019 Hash ^/pub/media/1$
+    expect 0 1019 Hash ^127\.0\.0\.1$
+
+    # Test 6: static content with X-Forwarded-Proto: https
+    expect 0 1020 Hash ^/static/1$
+    expect 0 1020 Hash ^127\.0\.0\.1$
+    expect 0 1022 Hash ^/static/1
+    expect 0 1022 Hash ^127\.0\.0\.1$
+    # No X-Forwarded-Proto header
+    expect 0 1023 Hash ^/static/1$
+    expect 0 1023 Hash ^127\.0\.0\.1$
+    # X-Forwarded-Proto: foo
+    expect 0 1024 Hash ^/static/1$
+    expect 0 1024 Hash ^127\.0\.0\.1$
+
+    # Test 7: same as test 6 but with "/pub" prefix
+    expect 0 1025 Hash ^/pub/static/1$
+    expect 0 1025 Hash ^127\.0\.0\.1$
+    expect 0 1027 Hash ^/pub/static/1$
+    expect 0 1027 Hash ^127\.0\.0\.1$
+    # No X-Forwarded-Proto header
+    expect 0 1028 Hash ^/pub/static/1$
+    expect 0 1028 Hash ^127\.0\.0\.1$
+    # X-Forwarded-Proto: foo
+    expect 0 1029 Hash ^/pub/static/1$
+    expect 0 1029 Hash ^127\.0\.0\.1$
+} -start
+
+client c1 {
+    # Test 1: cache miss, no X-Forwarded-Proto header set
+    txreq -url "/"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.body == "response1"
+
+    # Should hit cache
+    txreq -url "/"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "response1"
+
+    # Test 2: cache miss, X-Forwarded-Proto header set to "https"
+    txreq -url "/" -hdr "X-Forwarded-Proto: https"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.body == "response2"
+
+    # Should hit cache
+    txreq -url "/" -hdr "X-Forwarded-Proto: https"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "response2"
+
+    # Test 3: cache miss, X-Forwarded-Proto header set to "http"
+    txreq -url "/" -hdr "X-Forwarded-Proto: http"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.body == "response3"
+
+    # Should hit cache
+    txreq -url "/" -hdr "X-Forwarded-Proto: http"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "response3"
+
+    # Test 4: cache miss, X-Forwarded-Proto header set to "https"
+    txreq -url "/media/1" -hdr "X-Forwarded-Proto: https"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.body == "response4"
+
+    # Should hit cache
+    txreq -url "/media/1" -hdr "X-Forwarded-Proto: https"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "response4"
+
+    # X-Forwarded-Proto header stripped off for media content
+    txreq -url "/media/1"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "response4"
+
+    # X-Forwarded-Proto header stripped off for media content
+    txreq -url "/media/1" -hdr "X-Forwarded-Proto: foo"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "response4"
+
+    # Test 5: cache miss, X-Forwarded-Proto header set to "https"
+    txreq -url "/pub/media/1" -hdr "X-Forwarded-Proto: https"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.body == "response5"
+
+    # Should hit cache
+    txreq -url "/pub/media/1" -hdr "X-Forwarded-Proto: https"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "response5"
+
+    # X-Forwarded-Proto header stripped off for media content
+    txreq -url "/pub/media/1"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "response5"
+
+    # X-Forwarded-Proto header stripped off for media content
+    txreq -url "/pub/media/1" -hdr "X-Forwarded-Proto: foo"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "response5"
+
+    # Test 6: cache miss, X-Forwarded-Proto header set to "https"
+    txreq -url "/static/1" -hdr "X-Forwarded-Proto: https"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.body == "response6"
+
+    # Should hit cache
+    txreq -url "/static/1" -hdr "X-Forwarded-Proto: https"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "response6"
+
+    # X-Forwarded-Proto header stripped off for static content
+    txreq -url "/static/1"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "response6"
+
+    # X-Forwarded-Proto header stripped off for media content
+    txreq -url "/static/1" -hdr "X-Forwarded-Proto: foo"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "response6"
+
+    # Test 7: cache miss, X-Forwarded-Proto header set to "https"
+    txreq -url "/pub/static/1" -hdr "X-Forwarded-Proto: https"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.body == "response7"
+
+    # Should hit cache
+    txreq -url "/pub/static/1" -hdr "X-Forwarded-Proto: https"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "response7"
+
+    # X-Forwarded-Proto header stripped off for static content
+    txreq -url "/pub/static/1"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "response7"
+
+    # X-Forwarded-Proto header stripped off for media content
+    txreq -url "/pub/static/1" -hdr "X-Forwarded-Proto: foo"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "response7"
+} -run
+
+logexpect l1 -wait
