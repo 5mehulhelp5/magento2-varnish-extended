@@ -46,6 +46,12 @@ varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash"
 # make sure the probe request fired
 delay 1
 
+# Capture the logs to check if the purge requests trigger a "return(purge)" in Varnish
+logexpect l1 -v v1 -g request -q "ReqMethod eq 'PURGE'" {
+    expect * 1005 VCL_return ^purge$
+    expect * 1009 VCL_return ^purge$
+}  -start
+
 client c1 {
     # filling the cache
     txreq -method "GET" -url "/" -hdr "Context: fill the cache"
@@ -90,3 +96,5 @@ client c1 {
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "MISS"
 } -run
+
+logexpect l1 -wait
