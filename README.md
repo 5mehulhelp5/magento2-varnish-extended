@@ -62,4 +62,32 @@ Contrary to popular belief, loading & activating ('using') a new VCL does not pu
 
 ## Compatibility
 
-Needs at least Magento 2.4.7.
+Needs at least Magento 2.4.7 and Varnish 6.4.
+
+## Running the test suite
+
+The features of the VCL template are covered by a range of automated tests. To run the test suite, simply run `make test` in the `tests/varnish` folder:
+
+```shell
+cd tests/varnish
+make test
+```
+
+The `make test` command will start a Docker container that has all the `.vtc` files mounted and runs the `varnishtest` command to run the tests.
+
+This is the equivalent of running the following command in the `tests/varnish` folder:
+
+```shell
+varnishtest *.vtc
+```
+
+This will run the entire test suite, but you can also run individual tests by running the following command:
+
+```shell
+cd tests/varnish
+make test_single TEST=purge.vtc
+```
+
+This will only run the tests inside the `purge.vtc` file, which is the equivalent of running `varnishtest purge.vtc`.
+
+More information about the `varnishtest` program can be found  on the [varnish-cache.org documentation site](https://varnish-cache.org/docs/trunk/reference/varnishtest.html). You will also find information on the [Varnish Test Case syntax](https://varnish-cache.org/docs/trunk/reference/vtc.html).
