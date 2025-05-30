@@ -137,12 +137,6 @@ sub vcl_recv {
     # values, etc down the line.
     cookie.parse(req.http.cookie);
 
-    # Add support for Prismic preview functionality
-    # TODO MAKE CONFIGURABLE, DO NOT HARD-CODE PRISMIC HOST
-    if (cookie.isset("io.prismic.preview")) {
-        return (pass);
-    }
-
 {{for item in pass_on_cookie_presence}}
     if (req.http.Cookie ~ "{{var item.regex}}") {
         return (pass);

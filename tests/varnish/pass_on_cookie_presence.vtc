@@ -1,0 +1,99 @@
+varnishtest "cookie cache bypass tests"
+
+server s1 {
+    # first request will be the probe, handle it and be on our way
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp
+
+    # the probe expects the connection to close
+    close
+    accept
+
+    # Bypass the cache when the io.prismic.preview cookie is set
+    rxreq
+    expect req.url == "/"
+    expect req.http.cookie == "io.prismic.preview=y"
+    expect req.method == "GET"
+    txresp -hdr "Context: bypass the cache when io.prismic.preview cookie is set"
+
+    # Trigger a regular cache miss when no cookie is set
+    rxreq
+    expect req.url == "/"
+    expect req.http.cookie == <undef>
+    expect req.method == "GET"
+    txresp -hdr "Context: regular cache miss when no cookie is set"
+
+    # Bypass the cache when the test cookie is set
+    rxreq
+    expect req.url == "/"
+    expect req.http.cookie == "test=y"
+    expect req.method == "GET"
+    txresp -hdr "Context: bypass the cache when test cookie is set"
+
+    # Bypass the cache when the 2 blacklisted cookies are set
+    rxreq
+    expect req.url == "/"
+    expect req.http.cookie == "io.prismic.preview=y; test=y"
+    expect req.method == "GET"
+    txresp -hdr "Context: bypass the cache when 2 blacklisted cookies are set"
+
+    # Combine cookies with a non-blacklisted cookie
+    rxreq
+    expect req.url == "/"
+    expect req.http.cookie == "io.prismic.preview=y; ok=y; test=y"
+    expect req.method == "GET"
+    txresp -hdr "Context: bypass the cache when both blacklisted cookies and a non-blacklisted cookie are set"
+} -start
+
+# Generate the VCL file based on included variables and write it to output.vcl
+shell {
+    export s1_addr="${s1_addr}"
+    export s1_port="${s1_port}"
+    export PASS_ON_COOKIE_PRESENCE="cookie1 cookie2"
+    export COOKIE1_REGEX="(^|;)io.prismic.preview=.+($|;)"
+    export COOKIE2_REGEX="(^|;)test=.+($|;)"
+    ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
+}
+
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
+
+# make sure the probe request fired
+delay 1
+
+client c1 {
+    # Bypass the cache when the io.prismic.preview cookie is set
+    txreq -method "GET" -url "/" -hdr "Cookie: io.prismic.preview=y" -hdr "Context: bypass the cache when io.prismic.preview cookie is set"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "UNCACHEABLE"
+
+    # Regular cache miss when no cookie is set
+    txreq -method "GET" -url "/" -hdr "Context: cache miss"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+
+    # Cache hit
+    txreq -method "GET" -url "/" -hdr "Context: cache hit"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+
+    # Cache hit for non-blacklisted cookie
+    txreq -method "GET" -url "/" -hdr "Cookie: ok=y" -hdr "Context: cache hit when using the ok cookie"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+
+    # Bypass the cache when the test cookie is set
+    txreq -method "GET" -url "/" -hdr "Cookie: test=y" -hdr "Context: bypass the cache when test cookie is set"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "UNCACHEABLE"
+
+    # Combine cookies to ensure the cache is still bypassed
+    txreq -method "GET" -url "/" -hdr "Cookie: io.prismic.preview=y; test=y" -hdr "Context: bypass the cache when both cookies are set"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "UNCACHEABLE"
+
+    # Combine cookies with a non-blacklisted cookie
+    txreq -method "GET" -url "/" -hdr "Cookie: io.prismic.preview=y; ok=y; test=y" -hdr "Context: bypass the cache when both blacklisted cookies and a non-blacklisted cookie are set"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "UNCACHEABLE"
+} -run
