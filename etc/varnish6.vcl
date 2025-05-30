@@ -100,16 +100,9 @@ sub vcl_recv {
             return (synth(200, req.http.n-gone));
         }
 {{else}}
-        if (req.method == "PURGE") {
-            if (client.ip !~ purge) {
-                return (synth(405, "Method not allowed"));
-            }
-            if (!req.http.X-Magento-Tags-Pattern) {
-                return (purge);
-            }
-            ban("obj.http.X-Magento-Tags ~ " + req.http.X-Magento-Tags-Pattern);
-            return (synth(200, "0"));
-        }
+        ban("obj.http.X-Magento-Tags ~ " + req.http.X-Magento-Tags-Pattern);
+        return (synth(200, "0"));
+
 {{/if}}
     }
 
