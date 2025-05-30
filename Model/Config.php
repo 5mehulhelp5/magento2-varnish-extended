@@ -55,6 +55,10 @@ class Config extends PageCacheConfig
     {
         $trackingParams = $this->scopeConfig->getValue(static::XML_PATH_VARNISH_TRACKING_PARAMETERS);
 
+        if (is_string($trackingParams)) { // fallback for version 1.0.0 notation
+            return $trackingParams;
+        }
+
         return implode('|', array_map(function ($param) {
             return $param['param'];
         }, is_array($trackingParams) ? $trackingParams : json_decode($trackingParams, true)));
