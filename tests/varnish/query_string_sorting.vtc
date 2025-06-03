@@ -1,0 +1,41 @@
+varnishtest "Testing whether query string parameters are sorted alphabetically"
+
+server s1 {
+    # Probe request
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp
+
+    close
+    accept
+
+    # Expect query string parameters to be sorted alphabetically
+    rxreq
+    expect req.url == "/?a=b&c=d&e=f"
+    txresp
+} -start
+
+# Generate VCL
+shell {
+    export s1_addr="${s1_addr}"
+    export s1_port="${s1_port}"
+    ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
+}
+
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
+
+# Wait for probe
+delay 1
+
+logexpect l1 -v v1 -g request -i requrl {
+    expect 0 1001 ReqUrl "/?c=d&e=f&a=b"
+    expect 0 1001 ReqUrl "/?a=b&c=d&e=f"
+} -start
+
+
+client c1 {
+    txreq -url "/?c=d&e=f&a=b"
+    rxresp
+} -run
+
+logexpect l1 -wait
