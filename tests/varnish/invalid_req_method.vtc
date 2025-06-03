@@ -1,0 +1,44 @@
+varnishtest "Testing whether invalid request methods trigger a pipe response in Varnish"
+
+server s1 {
+    # Probe request
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp
+
+    close
+    accept
+
+    # Expect query string parameters to be sorted alphabetically
+    rxreq
+    expect req.method == "TEST"
+    expect req.url == "/"
+    txresp
+} -start
+
+# Generate VCL
+shell {
+    export s1_addr="${s1_addr}"
+    export s1_port="${s1_port}"
+    ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
+}
+
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
+
+# Wait for probe
+delay 1
+
+logexpect l1 -v v1 -g request {
+    expect * 1001 ReqMethod ^TEST$
+    expect * 1001 VCL_call ^PIPE$
+    expect * 1001 VCL_return ^pipe$
+} -start
+
+
+client c1 {
+    txreq -url "/" -method "TEST"
+    rxresp
+    expect resp.status == 200
+} -run
+
+logexpect l1 -wait
