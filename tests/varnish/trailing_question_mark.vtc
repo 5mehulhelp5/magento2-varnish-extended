@@ -1,0 +1,64 @@
+varnishtest "Testing whether trailing question marks are stripped from the URL"
+
+server s1 {
+    # Probe request
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp
+
+    close
+    accept
+
+    # Trailing question mark, strip it
+    rxreq
+    expect req.url == "/1"
+    txresp
+
+    # No question mark, do nothing
+    rxreq
+    expect req.url == "/2"
+    txresp
+
+    # Question mark with parameters, do nothing
+    rxreq
+    expect req.url == "/3?a=b"
+    txresp
+} -start
+
+# Generate VCL
+shell {
+    export s1_addr="${s1_addr}"
+    export s1_port="${s1_port}"
+    ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
+}
+
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
+
+# Wait for probe
+delay 1
+
+logexpect l1 -v v1 -g request -i ReqUrl {
+    expect 0 1001 ReqUrl ^/1\?$
+    expect 0 1001 ReqUrl ^/1$
+
+    expect 0 1003 ReqUrl ^/2$
+
+    expect 0 1005 ReqUrl ^/3\?a=b$
+} -start
+
+
+client c1 {
+    # Trailing question mark, strip it
+    txreq -url "/1?"
+    rxresp
+
+    # No question mark, do nothing
+    txreq -url "/2"
+    rxresp
+
+    # Question mark with parameters, do nothing
+    txreq -url "/3?a=b"
+    rxresp
+} -run
+
+logexpect l1 -wait
