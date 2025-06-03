@@ -1,0 +1,42 @@
+varnishtest "Testing whether port numbers are removed from the host header"
+
+server s1 {
+    # Probe request
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp
+
+    close
+    accept
+
+    # Port is removed from the host header
+    rxreq
+    expect req.http.host == "test.com"
+    txresp
+} -start
+
+# Generate VCL
+shell {
+    export s1_addr="${s1_addr}"
+    export s1_port="${s1_port}"
+    ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
+}
+
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
+
+# Wait for probe
+delay 1
+
+logexpect l1 -v v1 -g request -I ReqHeader:Host {
+    expect 0 1001 ReqHeader "Host: test.com:80"
+    expect 0 1001 ReqHeader "Host: test.com"
+} -start
+
+
+client c1 {
+    # Host header
+    txreq -url "/" -hdr "Host: test.com:80"
+    rxresp
+} -run
+
+logexpect l1 -wait
