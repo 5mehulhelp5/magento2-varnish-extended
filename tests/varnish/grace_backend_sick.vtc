@@ -1,0 +1,81 @@
+varnishtest "Testing whether grace can keep serving content when the backend is sick"
+
+barrier b1 cond 2
+barrier b2 cond 2
+
+server s1 {
+    # Probe request
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp -hdr "Context: server1"
+
+    accept
+
+    # Probe request
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp -hdr "Context: server2"
+
+    # By the time barrier b1 is synchronized, the health probes are processed
+	barrier b1 sync
+	accept
+
+    # Initial request always hits the backend
+    rxreq
+    expect req.url == "/"
+    txresp -hdr "Context: server3" -hdr "Cache-Control: public, max-age=1"
+
+    # Failing probe request
+    accept
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp -status 400 -hdr "Context: server4"
+
+    # Failing probe request
+    accept
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp -status 400 -hdr "Context: server5"
+
+    # By the time barrier b2 is synchronized, the response is stored in the cache
+    # And the health probes have failed
+    barrier b2 sync
+} -start
+
+# Generate VCL
+shell {
+    export s1_addr="${s1_addr}"
+    export s1_port="${s1_port}"
+    ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
+    sed -i -e 's/.timeout = 2s;/.timeout = 1s;/g' "${tmpdir}/output.vcl"
+    sed -i -e 's/.interval = 5s;/.interval = 1s;/g' "${tmpdir}/output.vcl"
+    sed -i -e 's/.window = 10;/.window = 2;/g' "${tmpdir}/output.vcl"
+    sed -i -e 's/.threshold = 5;/.threshold = 1;/g' "${tmpdir}/output.vcl"
+}
+
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
+
+# Wait for probe (server becomes healthy)
+barrier b1 sync
+
+client c1 {
+    # Initial request
+    txreq -url "/" -method "GET" -hdr "Context: req1"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+
+    # Second request hits the cache
+    txreq -url "/" -method "GET" -hdr "Context: req2"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+} -run
+
+# Wait for probe (server becomes sick)
+barrier b2 sync
+
+client c2 {
+    # Grace will kick in to serve stale content, even when the backend is sick
+    txreq -url "/" -method "GET" -hdr "Context: req3"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT-GRACE"
+} -run
