@@ -11,7 +11,7 @@ class TrackingParameters extends AbstractFieldArray
     /**
      * Prepare rendering the new field by adding all the needed columns
      */
-    protected function _prepareToRender()
+    protected function _prepareToRender(): void
     {
         $this->addColumn('param', ['label' => __('Tracking Parameters'), 'class' => 'required-entry']);
         $this->_addAfter = true;

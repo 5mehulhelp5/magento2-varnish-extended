@@ -123,17 +123,11 @@ class Config extends PageCacheConfig
         return $expressions ? $this->serializer->unserialize($expressions) : [];
     }
 
-    /**
-     * @return bool
-     */
     public function getEnableMediaCache(): bool
     {
         return (bool) $this->scopeConfig->getValue(static::XML_PATH_VARNISH_ENABLE_MEDIA_CACHE);
     }
 
-    /**
-     * @return bool
-     */
     public function getEnableStaticCache(): bool
     {
         return (bool) $this->scopeConfig->getValue(static::XML_PATH_VARNISH_ENABLE_STATIC_CACHE);

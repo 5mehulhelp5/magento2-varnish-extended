@@ -1,10 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Elgentos\VarnishExtended\Model\MarketingParameters;
 
 use Elgentos\VarnishExtended\Model\Config;
 use Magento\Catalog\Api\Data\EavAttributeInterface;
-use Magento\Catalog\Api\Data\ProductAttributeSearchResultsInterface;
 use Magento\Catalog\Api\ProductAttributeRepositoryInterface;
 use Magento\Framework\Api\SearchCriteriaBuilderFactory;
 use Magento\Framework\App\Config\ScopeConfigInterface;

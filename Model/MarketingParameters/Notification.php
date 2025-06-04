@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Elgentos\VarnishExtended\Model\MarketingParameters;
 
 use Elgentos\VarnishExtended\Model\NotificationInterface;
@@ -16,15 +18,14 @@ class Notification implements NotificationInterface
 
     public function getIdentity()
     {
-
     }
 
-    public function isDisplayed()
+    public function isDisplayed(): bool
     {
         return (bool)$this->flagManager->getFlagData(self::VARNISH_MARKETING_PARAMS);
     }
 
-    public function getText()
+    public function getText(): string
     {
         return '<p>' . __(
             'We found marketing parameter(s) that will be stripped in Varnish, ' .

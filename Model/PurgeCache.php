@@ -47,8 +47,12 @@ class PurgeCache extends \Magento\CacheInvalidate\Model\PurgeCache
         Config $varnishExtendedConfig,
         int $maxHeaderSize = 7680,
     ) {
-        parent::__construct($cacheServer, $socketAdapterFactory, $logger,
-            $maxHeaderSize);
+        parent::__construct(
+            $cacheServer,
+            $socketAdapterFactory,
+            $logger,
+            $maxHeaderSize
+        );
         $this->logger = $logger;
         $this->varnishExtendedConfig = $varnishExtendedConfig;
     }
@@ -59,7 +63,7 @@ class PurgeCache extends \Magento\CacheInvalidate\Model\PurgeCache
      * @param array|string $tags
      * @return bool Return true if successful; otherwise return false
      */
-    public function sendPurgeRequest($tags)
+    public function sendPurgeRequest($tags): bool
     {
         if (is_string($tags)) {
             $tags = [$tags];

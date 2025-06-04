@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Elgentos\VarnishExtended\Model\MarketingParameters\Events;
 
 use Elgentos\VarnishExtended\Model\MarketingParameters\Notification;
@@ -12,7 +14,7 @@ abstract class EventAbstract implements ObserverInterface
 {
     public function __construct(
         private readonly FlagManager $flagManager,
-        private readonly Validator   $validator,
+        private readonly Validator $validator,
     ) {}
 
     public function validateParams(array $trackingParams): void
