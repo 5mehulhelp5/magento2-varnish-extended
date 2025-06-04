@@ -1,0 +1,54 @@
+varnishtest "Testing whether a grace value of zero causes cache misses instead of graced hits"
+
+server s1 {
+    # Probe request
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp
+
+    close
+    accept
+
+    # Initial request always hits the backend
+    rxreq
+    expect req.url == "/"
+    txresp  -hdr "Cache-Control: public, max-age=1"
+
+    # Third request triggers a cache miss, because the grace was set to zero
+    rxreq
+    expect req.url == "/"
+    txresp  -hdr "Cache-Control: public, max-age=1"
+} -start
+
+# Generate VCL
+shell {
+    export s1_addr="${s1_addr}"
+    export s1_port="${s1_port}"
+    ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
+    sed -i -e 's/set req.grace = 300s;/set req.grace = 0s;/g' "${tmpdir}/output.vcl"
+}
+
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
+
+# Wait for probe
+delay 1
+
+client c1 {
+    # Initial request
+    txreq -url "/" -method "GET" -hdr "Context: req1"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+
+    # Second request hits the cache
+    txreq -url "/" -method "GET" -hdr "Context: req2"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+
+    # Wait for cache expiration
+    delay 1
+
+    # Third request triggers a cache miss, because the grace was set to zero
+    txreq -url "/" -method "GET" -hdr "Context: req3"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+} -run
