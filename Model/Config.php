@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Elgentos\VarnishExtended\Model;
 
+use Magento\Framework\App\Cache\StateInterface;
 use Magento\Framework\App\Config\ScopeConfigInterface;
+use Magento\Framework\Filesystem\Directory\ReadFactory;
 use Magento\Framework\HTTP\PhpEnvironment\Request;
+use Magento\Framework\Module\Dir\Reader;
 use Magento\Framework\Serialize\Serializer\Json;
 use Magento\PageCache\Model\Config as PageCacheConfig;
 use Magento\PageCache\Model\Varnish\VclGeneratorFactory;
@@ -32,11 +35,11 @@ class Config extends PageCacheConfig
     public const XML_PATH_VARNISH_PASS_ON_COOKIE_PRESENCE = 'system/full_page_cache/varnish/pass_on_cookie_presence';
 
     public function __construct(
-        \Magento\Framework\Filesystem\Directory\ReadFactory $readFactory,
-        \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
-        \Magento\Framework\App\Cache\StateInterface $cacheState,
-        \Magento\Framework\Module\Dir\Reader $reader,
-        \Magento\PageCache\Model\Varnish\VclGeneratorFactory $vclGeneratorFactory,
+        ReadFactory $readFactory,
+        ScopeConfigInterface $scopeConfig,
+        StateInterface $cacheState,
+        Reader $reader,
+        VclGeneratorFactory $vclGeneratorFactory,
         Json $serializer
     ) {
         parent::__construct(
