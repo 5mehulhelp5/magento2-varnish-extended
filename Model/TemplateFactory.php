@@ -22,11 +22,11 @@ class TemplateFactory
      * @param FilteringDepthMeter $filteringDepthMeter
      */
     public function __construct(
-        private readonly StringUtils               $stringUtils,
-        private readonly array                     $directiveProcessors,
+        private readonly StringUtils $stringUtils,
+        private readonly array $directiveProcessors,
         private readonly VariableResolverInterface $variableResolver,
-        private readonly SignatureProvider         $signatureProvider,
-        private readonly FilteringDepthMeter       $filteringDepthMeter,
+        private readonly SignatureProvider $signatureProvider,
+        private readonly FilteringDepthMeter $filteringDepthMeter,
     ) {}
 
     public function create(array $variables = []): Template

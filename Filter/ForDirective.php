@@ -4,11 +4,6 @@ declare(strict_types=1);
 
 namespace Elgentos\VarnishExtended\Filter;
 
-use Magento\Framework\DataObject;
-use Magento\Framework\Filter\DirectiveProcessorInterface;
-use Magento\Framework\Filter\Template;
-use Magento\Framework\Filter\VariableResolverInterface;
-
 /**
  * Fine-tuned ForDirective with better whitespace output
  */

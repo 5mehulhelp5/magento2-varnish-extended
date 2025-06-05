@@ -29,7 +29,7 @@ class Notifications implements MessageInterface
         return 'VARNISH_VCL_NOTIFICATIONS';
     }
 
-    public function isDisplayed()
+    public function isDisplayed(): bool
     {
         if (! $this->authorization->isAllowed(System::ADMIN_RESOURCE)) {
             return false;
@@ -44,7 +44,7 @@ class Notifications implements MessageInterface
         return false;
     }
 
-    public function getText()
+    public function getText(): string
     {
         $messageDetails = '';
 
@@ -65,12 +65,12 @@ class Notifications implements MessageInterface
         return $messageDetails;
     }
 
-    public function getSeverity()
+    public function getSeverity(): int
     {
         return static::SEVERITY_CRITICAL;
     }
 
-    private function getStoreConfigUrl()
+    private function getStoreConfigUrl(): string
     {
         return $this->escaper->escapeUrl(
             $this->urlBuilder->getUrl('adminhtml/system_config/index', [

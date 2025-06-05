@@ -11,7 +11,7 @@ class PassOnCookiePresence extends AbstractFieldArray
     /**
      * Prepare rendering the new field by adding all the needed columns
      */
-    protected function _prepareToRender()
+    protected function _prepareToRender(): void
     {
         $this->addColumn('regex', ['label' => __('Cookie Regex'), 'class' => 'required-entry']);
         $this->_addAfter = false;

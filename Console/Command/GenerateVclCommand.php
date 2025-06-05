@@ -9,12 +9,10 @@ use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Framework\Console\Cli;
 use Magento\Framework\Filesystem\DriverPool;
 use Magento\Framework\Filesystem\File\WriteFactory;
-use Magento\Framework\HTTP\PhpEnvironment\Request;
 use Magento\Framework\Serialize\Serializer\Json;
 use Magento\PageCache\Console\Command\GenerateVclCommand as MagentoGenerateVclCommand;
 use Magento\PageCache\Model\Config;
 use Magento\PageCache\Model\VclGeneratorInterfaceFactory;
-use Magento\Store\Model\ScopeInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -29,7 +27,12 @@ class GenerateVclCommand extends MagentoGenerateVclCommand
         private readonly Config $pageCacheConfig,
         private readonly VarnishExtendedConfig $varnishExtendedConfig,
     ) {
-        parent::__construct($vclGeneratorFactory, $writeFactory, $scopeConfig, $serializer);
+        parent::__construct(
+            $vclGeneratorFactory,
+            $writeFactory,
+            $scopeConfig,
+            $serializer
+        );
     }
 
     protected $inputToVclMap = [
@@ -47,7 +50,7 @@ class GenerateVclCommand extends MagentoGenerateVclCommand
     /**
      * @inheritdoc
      */
-    protected function configure()
+    protected function configure(): void
     {
         $this->setName('varnish:vcl:generate')
             ->setDescription('Generates Varnish VCL and echos it to the command line')
@@ -59,9 +62,9 @@ class GenerateVclCommand extends MagentoGenerateVclCommand
      *
      * @return InputOption[]
      */
-    private function getExtendedOptionList()
+    private function getExtendedOptionList(): array
     {
-        $options = [
+        return [
             new InputOption(
                 self::ACCESS_LIST_OPTION,
                 null,
@@ -117,14 +120,12 @@ class GenerateVclCommand extends MagentoGenerateVclCommand
                 1
             ),
         ];
-
-        return $options;
     }
 
     /**
      * @inheritdoc
      */
-    protected function execute(InputInterface $input, OutputInterface $output)
+    protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $errors = $this->validate($input);
         if ($errors) {
@@ -172,7 +173,7 @@ class GenerateVclCommand extends MagentoGenerateVclCommand
      * @param InputInterface $input
      * @return array
      */
-    private function getVclParameters(InputInterface $input)
+    private function getVclParameters(InputInterface $input): array
     {
         $parameters = [];
 
@@ -197,7 +198,7 @@ class GenerateVclCommand extends MagentoGenerateVclCommand
      * @param InputInterface $input
      * @return array
      */
-    protected function inputToVclParameters(InputInterface $input)
+    protected function inputToVclParameters(InputInterface $input): array
     {
         $parameters = [];
 
@@ -214,7 +215,7 @@ class GenerateVclCommand extends MagentoGenerateVclCommand
      * @param InputInterface $input
      * @return array
      */
-    protected function validate(InputInterface $input)
+    protected function validate(InputInterface $input): array
     {
         $errors = [];
 
