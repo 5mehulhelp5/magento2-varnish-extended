@@ -176,11 +176,11 @@ class GenerateVclCommand extends MagentoGenerateVclCommand
     {
         $parameters = [];
 
-        $enableBfcacheOptionPassed = (bool) $input->getParameterOption('--' . self::ENABLE_BFCACHE_OPTION, false, true);
-        $accessListOptionPassed = (bool) $input->getParameterOption('--' . self::ACCESS_LIST_OPTION, false, true);
-        $backendHostOptionPassed = (bool) $input->getParameterOption('--' . self::BACKEND_HOST_OPTION, false, true);
-        $backendPortOptionPassed = (bool) $input->getParameterOption('--' . self::BACKEND_PORT_OPTION, false, true);
-        $gracePeriodOptionPassed = (bool) $input->getParameterOption('--' . self::GRACE_PERIOD_OPTION, false, true);
+        $enableBfcacheOptionPassed = $input->getParameterOption('--' . self::ENABLE_BFCACHE_OPTION, false, true) !== false;
+        $accessListOptionPassed = $input->getParameterOption('--' . self::ACCESS_LIST_OPTION, false, true) !== false;
+        $backendHostOptionPassed = $input->getParameterOption('--' . self::BACKEND_HOST_OPTION, false, true) !== false;
+        $backendPortOptionPassed = $input->getParameterOption('--' . self::BACKEND_PORT_OPTION, false, true) !== false;
+        $gracePeriodOptionPassed = $input->getParameterOption('--' . self::GRACE_PERIOD_OPTION, false, true) !== false;
 
         $parameters['enableBfcache'] = $enableBfcacheOptionPassed ?: $this->varnishExtendedConfig->getEnableBfcache();
         $parameters['accessList'] = ($accessListOptionPassed ? $input->getOption(self::ACCESS_LIST_OPTION) : $this->varnishExtendedConfig->getAccessList());
