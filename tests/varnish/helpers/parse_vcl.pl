@@ -50,7 +50,7 @@ $content =~ s/{{for\s+item\s+in\s+([^}]+)}}(.*?){{\/for}}/handle_for($1, $2)/egs
 # Handle remaining variables
 while ($content =~ /{{var\s+([^}]+)}}/) {
     my $var_name = uc($1);
-    my $value = $ENV{$var_name} || '';
+    my $value = defined $ENV{$var_name} ? $ENV{$var_name} : '';
     $content =~ s/{{var\s+$1}}/$value/g;
 }
 
