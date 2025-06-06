@@ -1,0 +1,71 @@
+varnishtest "Test cookie collections and pass on specific cookies"
+
+server s1 {
+    # Probe request
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp
+
+    # the probe expects the connection to close
+    close
+    accept
+
+    # Request with multiple cookies
+    rxreq
+    expect req.url == "/test-url"
+    expect req.method == "GET"
+    # Check that cookies are collected into a single header with semicolons
+    expect req.http.cookie == "cookie1=value1;cookie2=value2;cookie3=value3"
+    txresp -body "Response with collected cookies"
+
+    # Request with PHPSESSID cookie that should trigger pass
+    rxreq
+    expect req.url == "/test-url"
+    expect req.method == "GET"
+    expect req.http.cookie == "PHPSESSID=123456"
+    txresp -body "Response with PHPSESSID cookie"
+
+    # Request with ADMIN cookie that should trigger pass
+    rxreq
+    expect req.url == "/test-url"
+    expect req.method == "GET"
+    expect req.http.cookie == "ADMIN=admin123"
+    txresp -body "Response with ADMIN cookie"
+} -start
+
+# Generate the VCL file
+shell {
+    export s1_addr="${s1_addr}"
+    export s1_port="${s1_port}"
+    export COOKIE1_REGEX="^PHPSESSID"
+    export COOKIE2_REGEX="^ADMIN"
+    ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
+}
+
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+VCL_Log" -start
+
+# make sure the probe request fired
+delay 1
+
+client c1 {
+    # Request with multiple Cookie headers
+    txreq -method "GET" -url "/test-url" \
+          -hdr "Cookie: cookie1=value1" \
+          -hdr "Cookie: cookie2=value2" \
+          -hdr "Cookie: cookie3=value3"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.body == "Response with collected cookies"
+
+    # Request with PHPSESSID cookie - should trigger pass
+    txreq -method "GET" -url "/test-url" -hdr "Cookie: PHPSESSID=123456"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "UNCACHEABLE"
+    expect resp.body == "Response with PHPSESSID cookie"
+
+    # Request with ADMIN cookie - should trigger pass
+    txreq -method "GET" -url "/test-url" -hdr "Cookie: ADMIN=admin123"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "UNCACHEABLE"
+    expect resp.body == "Response with ADMIN cookie"
+} -run
