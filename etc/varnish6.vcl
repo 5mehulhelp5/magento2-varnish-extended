@@ -127,27 +127,6 @@ sub vcl_recv {
         return (pass);
     }
 
-    # Collapse multiple cookie headers into one.
-    # We do this, because clients often send a Cookie header for each cookie they have.
-    # We want to join them all together with the ';' separator, so we can parse them in one batch.
-    std.collect(req.http.Cookie, ";");
-
-    # Parse the cookie header.
-    # This means that we can use the cookie functions to check for cookie existence,
-    # values, etc down the line.
-    cookie.parse(req.http.cookie);
-
-{{for item in pass_on_cookie_presence}}
-    if (req.http.Cookie ~ "{{var item.regex}}") {
-        return (pass);
-    }
-{{/for}}
-
-    # Remove all marketing/tracking get parameters to minimize the cache objects
-    if (req.url ~ "(\?|&)({{var tracking_parameters}})=") {
-        set req.url = regsuball(req.url, "({{var tracking_parameters}})=[-_A-z0-9+(){}%.]+&?", "");
-        set req.url = regsub(req.url, "[?|&]+$", "");
-    }
 
     # Media files caching
     if (req.url ~ "^/(pub/)?media/") {
@@ -169,6 +148,28 @@ sub vcl_recv {
 {{else}}
             return (pass);
 {{/if}}
+    }
+
+    # Collapse multiple cookie headers into one.
+    # We do this, because clients often send a Cookie header for each cookie they have.
+    # We want to join them all together with the ';' separator, so we can parse them in one batch.
+    std.collect(req.http.Cookie, ";");
+
+    # Parse the cookie header.
+    # This means that we can use the cookie functions to check for cookie existence,
+    # values, etc down the line.
+    cookie.parse(req.http.Cookie);
+
+{{for item in pass_on_cookie_presence}}
+    if (req.http.Cookie ~ "{{var item.regex}}") {
+        return (pass);
+    }
+{{/for}}
+
+    # Remove all marketing/tracking get parameters to minimize the cache objects
+    if (req.url ~ "(\?|&)({{var tracking_parameters}})=") {
+        set req.url = regsuball(req.url, "({{var tracking_parameters}})=[-_A-z0-9+(){}%.]+&?", "");
+        set req.url = regsub(req.url, "[?|&]+$", "");
     }
 
     # Bypass authenticated GraphQL requests without a X-Magento-Cache-Id
