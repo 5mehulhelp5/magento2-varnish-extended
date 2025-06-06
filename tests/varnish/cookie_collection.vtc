@@ -42,7 +42,7 @@ shell {
     ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
 }
 
-varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+VCL_Log" -start
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
 
 # make sure the probe request fired
 delay 1

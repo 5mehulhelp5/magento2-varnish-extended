@@ -1,4 +1,4 @@
-varnishtest "Test all X-Magento-Cache-Debug response values"
+varnishtest "Test debug header response values"
 
 server s1 {
     # Probe request
@@ -21,19 +21,25 @@ server s1 {
     expect req.url == "/uncacheable"
     expect req.method == "GET"
     txresp -status 503 -body "Uncacheable content"
-    
+
+    # Forced miss
+    rxreq
+    expect req.url == "/cacheable"
+    expect req.method == "GET"
+    txresp -hdr "Cache-Control: max-age=3600" -body "Cacheable content after forced refresh"
+
     # Request for content with short TTL
     rxreq
     expect req.url == "/short-ttl"
     expect req.method == "GET"
     txresp -hdr "Cache-Control: max-age=1" -body "Short TTL content"
     
-    # Request for forced refresh
+    # Request for content with short TTL
     rxreq
-    expect req.url == "/cacheable"
+    expect req.url == "/short-ttl"
     expect req.method == "GET"
-    txresp -hdr "Cache-Control: max-age=3600" -body "Cacheable content after forced refresh"
-}
+    txresp -hdr "Cache-Control: max-age=3600" -body "Short TTL content"
+} -start
 
 shell {
     export s1_addr="${s1_addr}"
@@ -42,7 +48,7 @@ shell {
     ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
 }
 
-varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+VCL_Log" -start
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
 
 # make sure the probe request fired
 delay 1
@@ -71,7 +77,7 @@ client c1 {
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "MISS-FORCED"
     expect resp.body == "Cacheable content after forced refresh"
-    
+
     # Test 5: HIT - Verify cache is updated after forced refresh
     txreq -method "GET" -url "/cacheable"
     rxresp
