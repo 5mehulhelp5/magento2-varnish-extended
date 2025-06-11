@@ -1,21 +1,24 @@
 varnishtest "Test debug header response values"
 
+barrier b1 cond 2
+
 server s1 {
     # Probe request
     rxreq
     expect req.url == "/health_check.php"
     txresp
-    
+
     # the probe expects the connection to close
     close
+    barrier b1 sync
     accept
-    
+
     # Request for cacheable content
     rxreq
     expect req.url == "/cacheable"
     expect req.method == "GET"
     txresp -hdr "Cache-Control: max-age=3600" -body "Cacheable content"
-    
+
     # Request for uncacheable content
     rxreq
     expect req.url == "/uncacheable"
@@ -33,7 +36,7 @@ server s1 {
     expect req.url == "/short-ttl"
     expect req.method == "GET"
     txresp -hdr "Cache-Control: max-age=1" -body "Short TTL content"
-    
+
     # Request for content with short TTL
     rxreq
     expect req.url == "/short-ttl"
@@ -51,7 +54,7 @@ shell {
 varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
 
 # make sure the probe request fired
-delay 1
+barrier b1 sync
 
 client c1 {
     # Test 1: MISS - First request for cacheable content
@@ -59,19 +62,19 @@ client c1 {
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "MISS"
     expect resp.body == "Cacheable content"
-    
+
     # Test 2: HIT - Second request for cacheable content
     txreq -method "GET" -url "/cacheable"
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "HIT"
     expect resp.body == "Cacheable content"
-    
+
     # Test 3: UNCACHEABLE - Request for uncacheable content
     txreq -method "GET" -url "/uncacheable"
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "UNCACHEABLE"
     expect resp.body == "Uncacheable content"
-    
+
     # Test 4: MISS-FORCED - Force cache refresh with no-cache header
     txreq -method "GET" -url "/cacheable" -hdr "pragma:no-cache"
     rxresp
@@ -83,16 +86,16 @@ client c1 {
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "HIT"
     expect resp.body == "Cacheable content after forced refresh"
-    
+
     # Test 6: Short TTL content to test HIT-GRACE
     txreq -method "GET" -url "/short-ttl"
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "MISS"
     expect resp.body == "Short TTL content"
-    
+
     # Wait for TTL to expire
     delay 2
-    
+
     # Test 7: HIT-GRACE - Request after TTL expired but within grace period
     txreq -method "GET" -url "/short-ttl"
     rxresp

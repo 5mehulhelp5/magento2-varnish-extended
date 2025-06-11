@@ -1,11 +1,14 @@
 varnishtest "X-Magento-Vary cookie handling"
 
+barrier b1 cond 2
+
 server s1 {
     # Probe request
     rxreq
     expect req.url == "/health_check.php"
     txresp
     close
+    barrier b1 sync
     accept
 
     # First request without X-Forwarded-Proto header
@@ -67,7 +70,7 @@ shell {
 varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
 
 # Wait for probe
-delay 1
+barrier b1 sync
 
 logexpect l1 -v v1 -g request -i Hash {
     # Test 1: no X-Forwarded-Proto header set

@@ -1,11 +1,14 @@
 varnishtest "X-Magento-Vary cookie handling"
 
+barrier b1 cond 2
+
 server s1 {
     # Probe request
     rxreq
     expect req.url == "/health_check.php"
     txresp
     close
+    barrier b1 sync
     accept
 
     # First request without vary cookie
@@ -43,7 +46,7 @@ shell {
 varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
 
 # Wait for probe
-delay 1
+barrier b1 sync
 
 logexpect l1 -v v1 -g request -q {ReqURL ~ "/graphql"} {
     fail add * Hash test1

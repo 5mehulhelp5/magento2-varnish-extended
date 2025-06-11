@@ -1,5 +1,7 @@
 varnishtest "Check if Set-Cookie headers are removed for cacheable content"
 
+barrier b1 cond 2
+
 server s1 {
     # first request will be the probe, handle it and be on our way
     rxreq
@@ -8,6 +10,7 @@ server s1 {
 
     # the probe expects the connection to close
     close
+    barrier b1 sync
     accept
 
     rxreq
@@ -27,7 +30,7 @@ shell {
 varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
 
 # make sure the probe request fired
-delay 1
+barrier b1 sync
 
 logexpect l1 -v v1 -g request -i BerespUnset -q "ReqUrl eq '/'" {
     expect 0 1002 BerespUnset "Set-Cookie: testcookie=1; path=/; HttpOnly"

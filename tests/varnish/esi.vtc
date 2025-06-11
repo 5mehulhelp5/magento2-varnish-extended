@@ -1,5 +1,7 @@
 varnishtest "Testing Edge-Side Includes"
 
+barrier b1 cond 2
+
 server s1 {
     # first request will be the probe, handle it and be on our way
     rxreq
@@ -8,6 +10,7 @@ server s1 {
 
     # the probe expects the connection to close
     close
+    barrier b1 sync
     accept
 
     # Cache miss, body contains an ESI tag that will get parsed by Varnish
@@ -67,7 +70,7 @@ shell {
 varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -arg "-p" -arg "feature=+esi_disable_xml_check" -start
 
 # make sure the probe request fired
-delay 1
+barrier b1 sync
 
 client c1 {
     # This request triggers 2 backend responses, but only returns a single response

@@ -1,5 +1,7 @@
 varnishtest "Testing whether query string parameters are sorted alphabetically"
 
+barrier b1 cond 2
+
 server s1 {
     # Probe request
     rxreq
@@ -7,6 +9,7 @@ server s1 {
     txresp
 
     close
+    barrier b1 sync
     accept
 
     # Expect query string parameters to be sorted alphabetically
@@ -25,7 +28,7 @@ shell {
 varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
 
 # Wait for probe
-delay 1
+barrier b1 sync
 
 logexpect l1 -v v1 -g request -i requrl {
     expect 0 1001 ReqUrl "/?c=d&e=f&a=b"
