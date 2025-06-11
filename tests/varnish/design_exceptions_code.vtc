@@ -1,0 +1,77 @@
+varnishtest "design_exceptions_code tests in vcl_hash"
+
+server s1 {
+    # Probe request
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp
+
+    # the probe expects the connection to close
+    close
+    accept
+
+    # Request for a URL that matches the design exception
+    rxreq
+    expect req.url == "/media/theme/design1/css/styles.css"
+    expect req.method == "GET"
+    txresp -hdr "Content-Type: text/css" -body "body { color: red; }"
+
+    # Request for a URL that doesn't match the design exception
+    rxreq
+    expect req.url == "/media/theme/other/css/styles.css"
+    expect req.method == "GET"
+    txresp -hdr "Content-Type: text/css" -body "body { color: blue; }"
+} -start
+
+# Generate the VCL file with design exceptions code
+shell {
+    export s1_addr="${s1_addr}"
+    export s1_port="${s1_port}"
+    export DESIGN_EXCEPTIONS_CODE="if (req.url ~ \"^/media/theme/design1/\") { hash_data(\"design1\"); }"
+    ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
+}
+
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
+
+# make sure the probe request fired
+delay 1
+
+logexpect l1 -v v1 -g request -q {ReqURL ~ "/media/theme/design1/css/styles.css"} {
+   expect * * Hash design1
+   expect * * Hash /media/theme/design1/css/styles.css
+} -start
+
+logexpect l2 -v v1 -g request -q {ReqURL ~ "/media/theme/other/css/styles.css"} {
+    fail add * Hash design1
+    expect * * Hash /media/theme/other/css/styles.css
+    fail clear
+} -start
+
+client c1 {
+    # Request for a URL that matches the design exception
+    txreq -method "GET" -url "/media/theme/design1/css/styles.css"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.body == "body { color: red; }"
+
+    # Request for a URL that doesn't match the design exception
+    txreq -method "GET" -url "/media/theme/other/css/styles.css"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.body == "body { color: blue; }"
+
+    # Request for the same URL that matches the design exception - should be a cache hit
+    txreq -method "GET" -url "/media/theme/design1/css/styles.css"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "body { color: red; }"
+
+    # Request for the same URL that doesn't match the design exception - should be a cache hit
+    txreq -method "GET" -url "/media/theme/other/css/styles.css"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.body == "body { color: blue; }"
+} -run
+
+logexpect l1 -wait
+logexpect l2 -wait
