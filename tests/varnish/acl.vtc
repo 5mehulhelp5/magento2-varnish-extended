@@ -1,10 +1,13 @@
 varnishtest "Don't perform forced cache refresh for non-whitelisted IP addresses"
 
+barrier b1 cond 2
+
 server s1 {
     # first request will be the probe, handle it and be on our way
     rxreq
     expect req.url == "/health_check.php"
     txresp
+    barrier b1 sync
 } -start
 
 # Generate the VCL file based on included variables and write it to output.vcl
@@ -18,7 +21,7 @@ shell {
 varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
 
 # make sure the probe request fired
-delay 1
+barrier b1 sync
 
 client c1 {
     # test URL-based cache purge

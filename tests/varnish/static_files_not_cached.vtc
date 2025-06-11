@@ -1,28 +1,31 @@
 varnishtest "Static files are not cached when enable_static_cache is false"
 
+barrier b1 cond 2
+
 server s1 {
     # first request will be the probe, handle it and be on our way
     rxreq
     expect req.url == "/health_check.php"
     txresp
-    
+
     # the probe expects the connection to close
     close
+    barrier b1 sync
     accept
-    
+
     # First request for static file
     rxreq
     expect req.url == "/static/version1234/frontend/Magento/luma/en_US/css/styles.css"
     expect req.method == "GET"
     txresp -hdr "Content-Type: text/css" -body "/* CSS styles - first request */"
-    
+
     # Second request for the same static file should also reach the backend
     # because caching is disabled for static files
     rxreq
     expect req.url == "/static/version1234/frontend/Magento/luma/en_US/css/styles.css"
     expect req.method == "GET"
     txresp -hdr "Content-Type: text/css" -body "/* CSS styles - second request */"
-    
+
     # Request with cookie should also reach the backend
     rxreq
     expect req.url == "/static/version1234/frontend/Magento/luma/en_US/css/styles.css"
@@ -42,7 +45,7 @@ shell {
 varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
 
 # make sure the probe request fired
-delay 1
+barrier b1 sync
 
 client c1 {
     # First request for static file
@@ -51,14 +54,14 @@ client c1 {
     expect resp.http.X-Magento-Cache-Debug == "UNCACHEABLE"
     expect resp.http.Content-Type == "text/css"
     expect resp.body == "/* CSS styles - first request */"
-    
+
     # Second request for the same static file should not be cached
     txreq -method "GET" -url "/static/version1234/frontend/Magento/luma/en_US/css/styles.css" -hdr "Host: example.com"
     rxresp
     expect resp.http.X-Magento-Cache-Debug == "UNCACHEABLE"
     expect resp.http.Content-Type == "text/css"
     expect resp.body == "/* CSS styles - second request */"
-    
+
     # Request with cookie should also not be cached
     txreq -method "GET" -url "/static/version1234/frontend/Magento/luma/en_US/css/styles.css" -hdr "Host: example.com" -hdr "Cookie: PHPSESSID=123456789"
     rxresp

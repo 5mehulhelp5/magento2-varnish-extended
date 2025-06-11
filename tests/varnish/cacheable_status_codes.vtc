@@ -1,11 +1,14 @@
 varnishtest "Check cacheable status codes"
 
+barrier b1 cond 2
+
 server s1 {
     # Probe request
     rxreq
     expect req.url == "/health_check.php"
     txresp
     close
+    barrier b1 sync
     accept
 
     # 200 OK response - first request
@@ -61,7 +64,7 @@ shell {
 varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
 
 # make sure the probe request fired
-delay 1
+barrier b1 sync
 
 client c1 {
     # 200 OK response - first request (should be a MISS)

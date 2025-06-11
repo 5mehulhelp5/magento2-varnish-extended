@@ -1,5 +1,7 @@
 varnishtest "Marketing parameters are stripped from the URL hash"
 
+barrier b1 cond 2
+
 server s1 {
     # Probe request
     rxreq
@@ -8,6 +10,7 @@ server s1 {
 
     # the probe expects the connection to close
     close
+    barrier b1 sync
     accept
 
     # Initial request without marketing parameters
@@ -34,7 +37,7 @@ shell {
 varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
 
 # make sure the probe request fired
-delay 1
+barrier b1 sync
 
 logexpect l1 -v v1 -g request {
     expect * 1001 Hash ^/product$
