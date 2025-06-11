@@ -1,0 +1,57 @@
+varnishtest "Static files are cached when enable_static_cache is true"
+
+server s1 {
+    # first request will be the probe, handle it and be on our way
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp
+    
+    # the probe expects the connection to close
+    close
+    accept
+    
+    # Request for static file
+    rxreq
+    expect req.url == "/static/version1234/frontend/Magento/luma/en_US/css/styles.css"
+    expect req.method == "GET"
+    txresp -hdr "Content-Type: text/css" -body "/* CSS styles */"
+    
+    # Second request for the same static file should be served from cache
+    # This request should not reach the backend if caching is enabled
+} -start
+
+# Generate the VCL file with enable_static_cache=true
+shell {
+    export s1_addr="${s1_addr}"
+    export s1_port="${s1_port}"
+    export ENABLE_STATIC_CACHE="1"
+    ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
+}
+
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
+
+# make sure the probe request fired
+delay 1
+
+client c1 {
+    # First request for static file
+    txreq -method "GET" -url "/static/version1234/frontend/Magento/luma/en_US/css/styles.css" -hdr "Host: example.com"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "MISS"
+    expect resp.http.Content-Type == "text/css"
+    expect resp.body == "/* CSS styles */"
+    
+    # Second request for the same static file should be served from cache
+    txreq -method "GET" -url "/static/version1234/frontend/Magento/luma/en_US/css/styles.css" -hdr "Host: example.com"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.http.Content-Type == "text/css"
+    expect resp.body == "/* CSS styles */"
+    
+    # Request with cookie should still be cached for static files
+    txreq -method "GET" -url "/static/version1234/frontend/Magento/luma/en_US/css/styles.css" -hdr "Host: example.com" -hdr "Cookie: PHPSESSID=123456789"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "HIT"
+    expect resp.http.Content-Type == "text/css"
+    expect resp.body == "/* CSS styles */"
+} -run

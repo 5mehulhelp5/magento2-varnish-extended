@@ -1,0 +1,68 @@
+varnishtest "Media files are not cached when enable_media_cache is false"
+
+server s1 {
+    # first request will be the probe, handle it and be on our way
+    rxreq
+    expect req.url == "/health_check.php"
+    txresp
+    
+    # the probe expects the connection to close
+    close
+    accept
+    
+    # First request for media file
+    rxreq
+    expect req.url == "/media/catalog/product/cache/1/image/265x265/beff4985b56e3afdbeabfc89641a4582/l/u/luma-yoga-jacket.jpg"
+    expect req.method == "GET"
+    txresp -hdr "Content-Type: image/jpeg" -body "JPEG image data - first request"
+    
+    # Second request for the same media file should also reach the backend
+    # because caching is disabled for media files
+    rxreq
+    expect req.url == "/media/catalog/product/cache/1/image/265x265/beff4985b56e3afdbeabfc89641a4582/l/u/luma-yoga-jacket.jpg"
+    expect req.method == "GET"
+    txresp -hdr "Content-Type: image/jpeg" -body "JPEG image data - second request"
+    
+    # Request with cookie should also reach the backend
+    rxreq
+    expect req.url == "/media/catalog/product/cache/1/image/265x265/beff4985b56e3afdbeabfc89641a4582/l/u/luma-yoga-jacket.jpg"
+    expect req.method == "GET"
+    expect req.http.cookie == "PHPSESSID=123456789"
+    txresp -hdr "Content-Type: image/jpeg" -body "JPEG image data - with cookie"
+} -start
+
+# Generate the VCL file with enable_media_cache=false
+shell {
+    export s1_addr="${s1_addr}"
+    export s1_port="${s1_port}"
+    export ENABLE_MEDIA_CACHE="0"
+    ${testdir}/helpers/parse_vcl.pl "${testdir}/../../etc/varnish6.vcl" "${tmpdir}/output.vcl"
+}
+
+varnish v1 -arg "-f" -arg "${tmpdir}/output.vcl" -arg "-p" -arg "vsl_mask=+Hash" -start
+
+# make sure the probe request fired
+delay 1
+
+client c1 {
+    # First request for media file
+    txreq -method "GET" -url "/media/catalog/product/cache/1/image/265x265/beff4985b56e3afdbeabfc89641a4582/l/u/luma-yoga-jacket.jpg" -hdr "Host: example.com"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "UNCACHEABLE"
+    expect resp.http.Content-Type == "image/jpeg"
+    expect resp.body == "JPEG image data - first request"
+    
+    # Second request for the same media file should not be cached
+    txreq -method "GET" -url "/media/catalog/product/cache/1/image/265x265/beff4985b56e3afdbeabfc89641a4582/l/u/luma-yoga-jacket.jpg" -hdr "Host: example.com"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "UNCACHEABLE"
+    expect resp.http.Content-Type == "image/jpeg"
+    expect resp.body == "JPEG image data - second request"
+    
+    # Request with cookie should also not be cached
+    txreq -method "GET" -url "/media/catalog/product/cache/1/image/265x265/beff4985b56e3afdbeabfc89641a4582/l/u/luma-yoga-jacket.jpg" -hdr "Host: example.com" -hdr "Cookie: PHPSESSID=123456789"
+    rxresp
+    expect resp.http.X-Magento-Cache-Debug == "UNCACHEABLE"
+    expect resp.http.Content-Type == "image/jpeg"
+    expect resp.body == "JPEG image data - with cookie"
+} -run
