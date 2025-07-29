@@ -13,7 +13,7 @@ This extension adds a field under Stores > Config > System > Full Page Cache > V
 **IMPORTANT NOTE**: this is not applied automatically! You need to use the optimized VCL:
 
 ```
-bin/magento varnish:vcl:generate --export-version=6 ---input-file=vendor/elgentos/magento2-varnish-extended/etc/varnish6.vcl -output-file=/data/web/varnish6.vcl
+bin/magento varnish:vcl:generate --export-version=6 --input-file=vendor/elgentos/magento2-varnish-extended/etc/varnish6.vcl --output-file=/data/web/varnish6.vcl
 varnishadm vcl.load new-custom-vcl /data/web/varnish6.vcl
 varnishadm vcl.use new-custom-vcl
 ```
