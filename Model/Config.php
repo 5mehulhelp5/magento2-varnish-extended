@@ -64,7 +64,7 @@ class Config extends PageCacheConfig
 
         return implode('|', array_map(function ($param) {
             return $param['param'];
-        }, is_array($trackingParams) ? $trackingParams : json_decode($trackingParams, true)));
+        }, is_array($trackingParams) ? $trackingParams : json_decode($trackingParams ?? '{}', true)));
     }
 
     public function getUseXkeyVmod(): bool
